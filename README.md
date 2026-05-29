@@ -1,98 +1,73 @@
-# YubiKey GPG Setup — Personal Notes
+# YubiKey GPG Setup — Personal Setup
 
-Setup for signing Git commits with GPG keys stored on **two** YubiKeys (nano + 5C NFC) that carry **identical** subkeys, so either key works interchangeably and losing one is a non-event.
+After leaving Microsoft, I no longer need to [manage multiple identities](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys). Additionally, my existing keys used RSA algorithms and were vulnerable to the [EUCLEAK](https://www.yubico.com/support/security-advisories/ysa-2024-03/).
 
-Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adapted for: macOS (Apple Silicon assumed), FileVault on, an already-formatted APFS-encrypted backup stick, ed25519/cv25519 keys, and a single personal identity (no work/EMU split — that no longer applies).
+After ~7 years, it was time to upgrade to new physical keys and newer encryption algorithms.
 
----
+### How I use YubiKeys
 
-## Background: applets (and why PIV ≠ OpenPGP)
+- Signing git commits
+- Encrypted `.netrc` file for authentication to cloud services, e.g. GitHub.
+- Passkey for passwordless authentication.
 
-An **applet** (aka "application") is a small sandboxed program running **on the YubiKey's chip itself** — NOT on the computer. The YubiKey is a tiny secure computer with its own processor and storage, running a Java Card runtime (embedded Java on the chip; nothing to do with browser Java). Each function is a separate applet with its own isolated storage and credentials:
+## Dual Key Setup
 
-- **OpenPGP** — GPG keys, signing/decryption, User PIN + Admin PIN. ← what this guide uses
-- **PIV** — X.509 smartcard certs, with PIN + PUK + Management Key
-- **FIDO2 / U2F** — passkeys/WebAuthn, own PIN
-- **OATH** — TOTP codes
-- **Yubico OTP** — touch-to-type one-time codes
+Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adapted for my personal requirements.
 
-This is exactly the "Applications" list in `ykman info`.
+### Result
 
-**The trap to remember:** these applets are independent. Configuring one does NOT touch another. In particular, my 1Password note mentioning **PIN / PUK / Management Key / PIV PIN** describes the **PIV** applet — that has NOTHING to do with the OpenPGP applet this guide cares about. PIV terms (PUK, Management Key) ≠ OpenPGP terms (User PIN, Admin PIN, Reset Code). So "I set up this key before" was true for PIV but the OpenPGP applet stayed pristine. Don't infer OpenPGP state from a PIV note — always check `ykman openpgp info` directly.
+- **Primary Key**
+  Stored separately offline on an APFS-encrypted USB drive.
 
-Consequences of the isolation:
-- `ykman openpgp reset` wipes ONLY OpenPGP. FIDO2/PIV/OATH are untouched.
-- A key can have FIDO2 passkeys and PIV certs set, yet a factory-fresh OpenPGP applet.
-- The check below looks at OpenPGP state *specifically*, ignoring everything else.
+- **Subkeys**
+  Setup two physical YubiKeys that have _identical_ subkeys for redudancy and to be used interchangeably:
+  - [YubiKey 5C Nano](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nano/) - daily driver and remains plugged into laptop. Removed when traveling.
+  - [YubiKey 5C NFC](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nfc/) - backup and used when traveling.
 
----
+### Required for Setup
 
-## First: is the key's OpenPGP applet in factory state?
+- **Mac**
+  FileVault enabled and used for generating key and encrypting USB drive.
 
-This guide assumes the **OpenPGP applet** is in factory state when you reach step 5. A YubiKey has several independent applets (OpenPGP, PIV, FIDO2, OATH, …) each with its own state. **Only the OpenPGP applet matters here.** A key can have PIV or FIDO2 configured and still have a pristine OpenPGP applet — they don't affect each other. So "I set up this key before" is not the right question; "is the *OpenPGP applet* clean?" is.
+- **Password Manager**
+  For PINs and most importantly storing **certify passkey** separately from USB stick. Both are needed to use the offline primary key.
 
-### How to check
+## Security Terminology & Abbreviations
 
-```bash
-ykman openpgp info
-```
+Below are some useful terms and brief definitions, useful for understanding guide.
 
-Read it like this:
+### Abbreviations
 
-| Field | Factory state | Already configured |
-|-------|---------------|--------------------|
-| `KDF enabled` | `False` | `True` |
-| `PIN tries remaining` | `3` | `3` (could still be 3 if never failed — not decisive) |
-| `Signature key`/`Encryption key`/`Authentication key` fingerprints | absent / empty | present |
-| `Signature counter` | `0` | `> 0` if ever used to sign |
+| Term | Description |
+|------|-------------|
+| **GPG / GnuPG** | GNU Privacy Guard, the signing/encryption software. |
+| **Certify key** | the primary `[C]` key. Issues and revokes subkeys. |
+| **Subkey** | `[S]` sign, `[E]` encrypt, `[A]` authenticate. |
+| **ed25519** | elliptic-curve algorithm for SIGNING and SSH auth. Cannot encrypt. |
+| **cv25519** (Curve25519 / X25519) | Algorithm used for ENCRYPTION. |
+| **KDF** | Key Derived Function. Makes the YubiKey hash the PIN on the host before sending it to the card, so the PIN isn't transmitted in plaintext. |
+| **stub** | after `keytocard`, the on-disk key becomes a pointer ("stub") to a specific YubiKey serial number. |
+| **User PIN / Admin PIN** | OpenPGP applet PINs. Defaults `123456` / `12345678`. |
 
-The decisive signals are **`KDF enabled: True`** and **any key fingerprints listed**. Either of those means the OpenPGP applet has been configured. Default PINs alone aren't conclusive (a fresh key also shows `3` tries), so don't rely on the PIN counter.
+> [!IMPORTANT]
+> Need to enable Key Derived Function (KDF) one, **BEFORE** setting PINs or moving keys.
 
-Also useful — does the card already hold keys?
+### Applets
 
-```bash
-gpg --card-status
-```
+**Applets** - refers to sandboxed Java program running on YubiKey itself. Each key has following applets:
 
-If the `General key info` / `Signature key` etc. lines show fingerprints, the card has keys on it. Empty/`[none]` means no OpenPGP keys present.
+| Applet | Description |
+|--------|-------------|
+| **OpenPGP** | GPG keys, signing/decryption, User PIN + Admin PIN.  |
+| **PIV** | X.509 smartcard certs, with PIN + PUK + Management Key |
+| **FIDO2 / U2F** | passkeys/WebAuthn, own PIN |
+| **OATH** | TOTP codes |
+| **Yubico OTP** | touch-to-type one-time codes |
 
-### What to do for each case
-
-- **Factory state** (KDF False, no key fingerprints): proceed straight to the guide. Step 5a's KDF setup will work.
-- **Already configured** (KDF True, or key fingerprints present): reset the OpenPGP applet FIRST, then proceed. This wipes ONLY OpenPGP — FIDO2, PIV, OATH untouched:
-  ```bash
-  ykman openpgp reset
-  ```
-  Irreversible and immediate. If the card currently holds working subkeys you still use, don't reset until you've confirmed your backup stick can re-provision them. After reset, the applet is factory-fresh and the KDF-first ordering in step 5a works.
-
-> **Why reset is sometimes mandatory, not optional:** step 5a enables KDF, and `kdf-setup` only succeeds on a clean applet. On a key whose PINs were already changed, it fails with `Conditions of use not satisfied`. Reset clears that.
-
-### Status of MY two keys (as of last check — re-verify before starting)
-
-- **Nano (incoming):** brand-new out of package → factory state → no reset needed.
-- **5C NFC:** OpenPGP applet was factory state when checked (`KDF: False`, no key fingerprints). Its PIV applet has PIN/PUK/Mgmt Key set, but PIV ≠ OpenPGP, so that doesn't require an OpenPGP reset. **Re-run `ykman openpgp info` before starting** to confirm nothing changed since — if `KDF enabled` now reads `True` or key fingerprints appear, run `ykman openpgp reset` first.
+> [!NOTE]
+> The YubiKey manager app [ykman](https://www.yubico.com/support/download/yubikey-manager/) is for PIV, not OpenGPG.
 
 ---
-
-## Abbreviations (in case I'm reading this months later)
-
-- **GPG / GnuPG** — GNU Privacy Guard, the signing/encryption software.
-- **Certify key** — the primary `[C]` key. Issues and revokes subkeys. Kept OFFLINE on the encrypted stick. Never goes on a YubiKey.
-- **Subkey** — `[S]` sign, `[E]` encrypt, `[A]` authenticate. These go on the YubiKeys.
-- **ed25519** — elliptic-curve algorithm for SIGNING and SSH auth. Cannot encrypt.
-- **cv25519** (Curve25519 / X25519) — the ENCRYPTION counterpart. The encrypt subkey must use this, not ed25519.
-- **KDF** — Key Derived Function. Makes the YubiKey hash the PIN on the host before sending it to the card, so the PIN isn't transmitted in plaintext. Enable ONCE, BEFORE setting PINs or moving keys.
-- **stub** — after `keytocard`, the on-disk key becomes a pointer ("stub") to a specific YubiKey serial number. The real key material is gone from disk. This is why provisioning a second key requires restoring from backup first.
-- **User PIN / Admin PIN** — OpenPGP applet PINs. Defaults `123456` / `12345678`. Separate from the FIDO2 PIN and from PIV. (PIV uses different terms entirely — PIN / PUK / Management Key — see "Background: applets" above.)
-
----
-
-## Key facts to keep in mind
-
-- `keytocard` is a **move, not a copy**. It destroys the on-disk subkey. To load a second YubiKey, restore the backup first, then `keytocard` again.
-- The Certify key stays offline. Day-to-day you only ever use the subkeys on the YubiKey.
-- Past signed commits on GitHub stay "Verified" even after key rotation, because GitHub stores a persistent verification record at push time.
-- FIDO2 passkeys are SEPARATE from all of this. Not covered here. ~30 seconds per site in GitHub settings, whenever.
 
 ### Handling secrets in the shell
 
