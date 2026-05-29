@@ -1,6 +1,6 @@
 # YubiKey GPG Setup — Personal Setup
 
-After leaving Microsoft, I no longer need to [manage multiple identities](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys). Additionally, my existing keys used RSA algorithms and were vulnerable to the [EUCLEAK](https://www.yubico.com/support/security-advisories/ysa-2024-03/).
+After leaving Microsoft, I no longer need to [manage multiple identities](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys). Additionally, my existing keys used RSA algorithms and were vulnerable to the [EUCLEAK](https://www.yubico.com/support/security-advisories/ysa-2024-03/). 
 
 After ~7 years, it was time to upgrade to new physical keys and newer encryption algorithms.
 
@@ -12,31 +12,31 @@ After ~7 years, it was time to upgrade to new physical keys and newer encryption
 
 ## Dual Key Setup
 
-Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adapted for my personal requirements.
+Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adapted for my personal requirements. 
 
 ### Result
 
-- **Primary Key**
+- **Primary Key**  
   Stored separately offline on an APFS-encrypted USB drive.
 
-- **Subkeys**
+- **Subkeys**  
   Setup two physical YubiKeys that have _identical_ subkeys for redudancy and to be used interchangeably:
   - [YubiKey 5C Nano](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nano/) - daily driver and remains plugged into laptop. Removed when traveling.
   - [YubiKey 5C NFC](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nfc/) - backup and used when traveling.
 
 ### Required for Setup
 
-- **Mac**
+- **Mac**  
   FileVault enabled and used for generating key and encrypting USB drive.
 
-- **Password Manager**
+- **Password Manager**  
   For PINs and most importantly storing **certify passkey** separately from USB stick. Both are needed to use the offline primary key.
 
 ## Security Terminology & Abbreviations
 
-Below are some useful terms and brief definitions, useful for understanding guide.
+Below are some useful terms and brief definitions, useful for understanding guide. 
 
-### Abbreviations
+### Abbreviations 
 
 | Term | Description |
 |------|-------------|
