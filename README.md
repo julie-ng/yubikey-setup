@@ -34,38 +34,44 @@ Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adap
 
 ## Security Terminology & Abbreviations
 
-Below are some useful terms and brief definitions, useful for understanding guide. 
+<details>
+  <summary>
+    Below are some useful terms and brief definitions, useful for understanding guide. 
+  </summary>
 
-### Abbreviations 
+  ### Abbreviations 
+  
+  | Term | Description |
+  |------|-------------|
+  | **GPG / GnuPG** | GNU Privacy Guard, the signing/encryption software. |
+  | **Certify key** | the primary `[C]` key. Issues and revokes subkeys. |
+  | **Subkey** | `[S]` sign, `[E]` encrypt, `[A]` authenticate. |
+  | **ed25519** | elliptic-curve algorithm for SIGNING and SSH auth. Cannot encrypt. |
+  | **cv25519** (Curve25519 / X25519) | Algorithm used for ENCRYPTION. |
+  | **KDF** | Key Derived Function. Makes the YubiKey hash the PIN on the host before sending it to the card, so the PIN isn't transmitted in plaintext. |
+  | **stub** | after `keytocard`, the on-disk key becomes a pointer ("stub") to a specific YubiKey serial number. |
+  | **User PIN / Admin PIN** | OpenPGP applet PINs. Defaults `123456` / `12345678`. |
+  
+  > [!IMPORTANT]
+  > Need to enable Key Derived Function (KDF) one, **BEFORE** setting PINs or moving keys.
+  
+  ### Applets
+  
+  **Applets** - refers to sandboxed Java program running on YubiKey itself. Each key has following applets:
+  
+  | Applet | Description |
+  |--------|-------------|
+  | **OpenPGP** | GPG keys, signing/decryption, User PIN + Admin PIN.  |
+  | **PIV** | X.509 smartcard certs, with PIN + PUK + Management Key |
+  | **FIDO2 / U2F** | passkeys/WebAuthn, own PIN |
+  | **OATH** | TOTP codes |
+  | **Yubico OTP** | touch-to-type one-time codes |
+  
+  > [!NOTE]
+  > The YubiKey manager app [ykman](https://www.yubico.com/support/download/yubikey-manager/) is for PIV, not OpenGPG.
+</details>
 
-| Term | Description |
-|------|-------------|
-| **GPG / GnuPG** | GNU Privacy Guard, the signing/encryption software. |
-| **Certify key** | the primary `[C]` key. Issues and revokes subkeys. |
-| **Subkey** | `[S]` sign, `[E]` encrypt, `[A]` authenticate. |
-| **ed25519** | elliptic-curve algorithm for SIGNING and SSH auth. Cannot encrypt. |
-| **cv25519** (Curve25519 / X25519) | Algorithm used for ENCRYPTION. |
-| **KDF** | Key Derived Function. Makes the YubiKey hash the PIN on the host before sending it to the card, so the PIN isn't transmitted in plaintext. |
-| **stub** | after `keytocard`, the on-disk key becomes a pointer ("stub") to a specific YubiKey serial number. |
-| **User PIN / Admin PIN** | OpenPGP applet PINs. Defaults `123456` / `12345678`. |
 
-> [!IMPORTANT]
-> Need to enable Key Derived Function (KDF) one, **BEFORE** setting PINs or moving keys.
-
-### Applets
-
-**Applets** - refers to sandboxed Java program running on YubiKey itself. Each key has following applets:
-
-| Applet | Description |
-|--------|-------------|
-| **OpenPGP** | GPG keys, signing/decryption, User PIN + Admin PIN.  |
-| **PIV** | X.509 smartcard certs, with PIN + PUK + Management Key |
-| **FIDO2 / U2F** | passkeys/WebAuthn, own PIN |
-| **OATH** | TOTP codes |
-| **Yubico OTP** | touch-to-type one-time codes |
-
-> [!NOTE]
-> The YubiKey manager app [ykman](https://www.yubico.com/support/download/yubikey-manager/) is for PIV, not OpenGPG.
 
 ---
 
