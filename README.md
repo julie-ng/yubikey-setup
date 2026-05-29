@@ -1,6 +1,6 @@
 # YubiKey GPG Setup — Personal Setup
 
-After leaving Microsoft, I no longer need to [manage multiple identities](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys). Additionally, my existing keys used RSA algorithms and were vulnerable to the [EUCLEAK](https://www.yubico.com/support/security-advisories/ysa-2024-03/). 
+After leaving Microsoft, I no longer need to [manage multiple identities](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys). Additionally, my existing keys are vulnerable to the [EUCLEAK](https://www.yubico.com/support/security-advisories/ysa-2024-03/). 
 
 After ~7 years, it was time to upgrade to new physical keys and newer encryption algorithms.
 
@@ -12,12 +12,12 @@ After ~7 years, it was time to upgrade to new physical keys and newer encryption
 
 ## Dual Key Setup
 
-Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adapted for my personal requirements. 
+Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adapted for my personal requirements.
 
 ### Result
 
 - **Primary Key**  
-  Stored separately offline on an APFS-encrypted USB drive.
+  Stored separately offline on an APFS-encrypted USB drive. 
 
 - **Subkeys**  
   Setup two physical YubiKeys that have _identical_ subkeys for redudancy and to be used interchangeably:
@@ -31,6 +31,22 @@ Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adap
 
 - **Password Manager**  
   For PINs and most importantly storing **certify passkey** separately from USB stick. Both are needed to use the offline primary key.
+
+## Cryptographic Algorithms — Curve25519, not RSA
+
+My [old setup (2018)](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys) used RSA cryptography, which has wider support but is older. 
+
+For this 2026 setup I chose the more modern Curve25519-family cryptography with EdDSA for certify/sign/auth and ECDH for encryption (EdDSA can't encrypt):
+
+| Key | Function | Algorithm | Curve |
+|-----|----------|-----------|-------|
+| `[C]` Primary Key | Certification | EdDSA | `ed25519` |
+| `[S]` Subkey | Signature | EdDSA | `ed25519` |
+| `[A]` Subkey | Authentication | EdDSA | `ed25519` |
+| `[E]` Subkey | Encryption | ECDH | `cv25519` |
+
+> [!IMPORTANT]
+> Before adopting this setup, check that every system you sign or authenticate to accepts Curve25519 keys — some older services still require RSA.
 
 ## Security Terminology & Abbreviations
 
@@ -47,7 +63,7 @@ Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adap
 | **Certify key** | the primary `[C]` key. Issues and revokes subkeys. |
 | **Subkey** | `[S]` sign, `[E]` encrypt, `[A]` authenticate. |
 | **ed25519** | elliptic-curve algorithm for SIGNING and SSH auth. Cannot encrypt. |
-| **cv25519** (Curve25519 / X25519) | Algorithm used for ENCRYPTION. |
+| **cv25519** | (Curve25519 / X25519) Algorithm used for ENCRYPTION. |
 | **KDF** | Key Derived Function. Makes the YubiKey hash the PIN on the host before sending it to the card, so the PIN isn't transmitted in plaintext. |
 | **stub** | after `keytocard`, the on-disk key becomes a pointer ("stub") to a specific YubiKey serial number. |
 | **User PIN / Admin PIN** | OpenPGP applet PINs. Defaults `123456` / `12345678`. |
@@ -72,133 +88,118 @@ Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adap
 
 </details>
 
-
-
 ---
 
-### Handling secrets in the shell
+# Instructions
 
-Design principle: the Certify passphrase is generated **straight to a file in `$GNUPGHOME`** (the temp working dir on internal disk) and every GPG command reads it via `--passphrase-file`. It never touches a shell variable, a command argument, or a heredoc — so it never appears in any form that shell history or scrollback would capture.
+Please note some personal preferences in this guide:
 
-What this means in practice:
+- Prefer interactive `--edit-key` over scriptable `--pinentry-mode=loopback` to avoid secrets landing in `.zsh_history`, etc. 
+- _Not_ copying drdruh's configs because custom output formats. In a setup once and forget scenario, I prefer default formats, easier for debugging later.
 
-- The passphrase lives in `"$GNUPGHOME/certify-pass.txt"` (temp dir, internal disk, FileVault-encrypted, cleared on reboot), plus 1Password once you copy it there.
-- **It's used two different ways**, by design:
-  - **Key generation (step 3):** `--passphrase-file` + `--pinentry-mode=loopback`. These `--quick-*` commands only need the passphrase (no card, no Admin PIN), so feeding it from the file is clean and scriptable.
-  - **keytocard (steps 5d/6):** plain interactive `--edit-key`, NO loopback. keytocard needs the passphrase AND the Admin PIN; loopback can't supply the Admin PIN, so you let pinentry-mac prompt for both and you paste the passphrase from 1Password. The file isn't read here — which is exactly why ejecting the stick before keytocard is fine.
-- Commands that DO land in history (`tr ... > file`, the `gpg --passphrase-file` invocations) contain no secret — so you do NOT need `HIST_IGNORE_SPACE` or to clear history to protect the passphrase. Clearing history afterward is fine for general tidiness, but it's optional, not a secret-exposure fix.
-- The file persists in the temp dir through generation; the step-6 restore brings it back from the backup. Deleted explicitly in cleanup (step 11).
+### Pre-requisites checklist
 
-PINs: set interactively via `gpg --card-edit` (the prompts don't echo and aren't arguments), then recorded in 1Password by hand.
+- [ ] Mac: FileVault confirmed ON (System Settings → Privacy & Security → FileVault).
+- [ ] USB Stick: format as APFS-encrypted 
+- [ ] YubiKeys: confirm not susceptible to EUCLEAK by checking firmware is **version 5.7.0 or higher** via `ykman info`
+- [ ] Install tools
+  ```bash
+  brew install gnupg ykman pinentry-mac
+  ```
 
-The `keyinfo.txt` (KEYID/KEYFP — not secret) is written to the stick since step 6 needs it after restore. The passphrase file is NOT deliberately written to the stick — it only ends up there as part of the full-directory backup, and is cleared when the temp dir is gone / on cleanup.
+### 1. Setup Isolated working directory
 
----
-
-## Before starting
-
-- [ ] FileVault confirmed ON (System Settings → Privacy & Security → FileVault).
-- [ ] APFS-encrypted backup stick formatted and mounted (e.g. `/Volumes/GPG-Backup`).
-- [ ] Stick password saved in 1Password.
-- [ ] Both YubiKeys on hand (nano + 5C NFC).
-- [ ] Turn WiFi OFF for the generation + backup portion. (Not a true air-gap, but no reason to be online while the Certify key is in memory.)
-
-Install tools:
-
-```bash
-brew install gnupg ykman pinentry-mac
-```
-
----
-
-## 1. Isolated working directory
-
-Generate in a throwaway `GNUPGHOME` so nothing touches your real `~/.gnupg` until the end, and it evaporates on reboot.
+Use `mktemp` to generate in a throwaway `GNUPGHOME`, which will hold our private keys until transferred to YubiKey. This temp directory evaporates on reboot. 
 
 ```bash
 export GNUPGHOME=$(mktemp -d)
 echo "$GNUPGHOME"
-```
-
-Optionally pull drduh's `gpg.conf` into the **temp dir only** — this affects just the display during setup (full `0xlong` key IDs and fingerprint lines in `gpg -K`, handy for confirming you're acting on the right key at keytocard). It evaporates with the temp dir and never reaches your real `~/.gnupg`, so it doesn't commit you to anything:
-
-```bash
 cd "$GNUPGHOME"
-curl -fLO https://raw.githubusercontent.com/drduh/YubiKey-Guide/master/config/gpg.conf
 ```
 
-> Skip this if you prefer — generation works fine on GnuPG defaults; listings just show shorter key IDs and no fingerprints. (Step 7 declines the configs for the real `~/.gnupg` regardless; this is only a setup-time convenience.)
-
-> **WiFi off now** for the rest of generation + backup.
+> [!NOTE]
+> `GNUPGHOME` requires `export` in order for `gpg` to read it from the shell environment.
 
 ---
 
-## 2. Set variables
+### 2. Generate strong Certify passphrase
+
+First confirm you are in the temp directory, which should ouput something like this:
 
 ```bash
-export IDENTITY="Your Name <foo@bar.com>"          # the email you'll verify on GitHub
-export EXPIRATION=2y                               # subkeys expire in 2 years
+$ pwd # print working directory
+/var/folders/tc/k2p_qwn37mvldzjps_8x49a6t0000gn/T/tmp.aB3kPzQ9rN # example output
 ```
 
-Generate a strong Certify passphrase **directly to a file in `$GNUPGHOME`** (the temp dir on internal disk, FileVault-encrypted, cleared on reboot). It never enters a shell variable, so it can't leak via history or the environment:
+Then generate the passphrase directly to a `certify-pass.txt` file in `$GNUPGHOME`:
 
 ```bash
 LC_ALL=C tr -dc "A-Z2-9" < /dev/urandom | tr -d "IOUS5" | \
     fold -w 4 | paste -sd - - | head -c 29 > "$GNUPGHOME/certify-pass.txt"
 ```
 
-Now copy its value into 1Password (labeled e.g. "GPG Certify key passphrase 2026"). You can view it without printing to a logged terminal by opening it in an editor, or just read it from 1Password later.
+### 3. Generate keys
 
-> **Where the file lives:** generated in `$GNUPGHOME` (the working temp dir) for now. In step 4's backup it's moved to the **stick root** as a sibling of `gnupghome-backup/` — kept out of the keyring backup so that dir stays a faithful copy of a real gnupghome. It's only *read from a file* by the **key-generation** commands in step 3 (`--passphrase-file`); the **keytocard** steps (5d/6) prompt for it interactively via pinentry (paste from 1Password), so its location doesn't affect ejecting the stick before keytocard. Deleted in cleanup (step 11); a reboot clears the `$GNUPGHOME` copy.
-
----
-
-## 3. Generate keys (ed25519 / cv25519)
-
-The drduh batch commands reuse one `KEY_TYPE` for all subkeys, which can't produce a cv25519 encryption subkey cleanly. Do it interactively instead so each curve is explicit.
-
-### Certify key (ed25519, no expiry)
-
-```bash
-gpg --batch --passphrase-file "$GNUPGHOME/certify-pass.txt" \
-    --quick-generate-key "$IDENTITY" ed25519 cert never
-```
-
-Capture the key ID and fingerprint:
-
-```bash
-export KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
-export KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
-# KEYID/KEYFP are public (not secret), but save them to a file — you'll need KEYID
-# again in step 6 when you restore the backup to provision the second key.
-{ echo "KEYID=$KEYID"; echo "KEYFP=$KEYFP"; } > /Volumes/GPG-Backup/keyinfo.txt
-```
-
-### Sign + Auth subkeys (ed25519), Encrypt subkey (cv25519)
+Before running commands, set the passfile location and set a few variables for re-use.
 
 ```bash
 PASSFILE="$GNUPGHOME/certify-pass.txt"
+IDENTITY="Your Name <foo@bar.com>"          
+EXPIRATION=2y
+```
 
+#### 3A. Generate Certify key 
+
+(ed25519, no expiry)
+
+Generate the certify `[C]` key:
+
+```bash
+gpg --batch --passphrase-file "$PASSFILE" \
+    --quick-generate-key "$IDENTITY" ed25519 cert never
+```
+
+Capture the key ID and fingerprint into a `keyinfo.txt` for later.
+
+```bash
+KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
+KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
+{ echo "KEYID=$KEYID"; echo "KEYFP=$KEYFP"; } > /Volumes/GPG-Backup/keyinfo.txt
+```
+
+#### 3B. Generate SIGN subkey 
+
+```bash
 # Signing subkey
 gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" ed25519 sign "$EXPIRATION"
+```
 
+#### 3C. Generate AUTH subkey 
+
+```bash
 # Authentication subkey
 gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" ed25519 auth "$EXPIRATION"
+```
 
+#### 3D. Generate ENCRYPT subkey 
+
+```bash
 # Encryption subkey — NOTE: cv25519, not ed25519
 gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" cv25519 encrypt "$EXPIRATION"
 ```
 
-Verify you have `[C]`, `[S]`, `[A]`, `[E]`:
+#### 3E. Verify keys were generated
+
+Verify `[C]`, `[S]`, `[A]`, `[E]` keys were generated. Run
 
 ```bash
 gpg -K
 ```
 
-Expect something like:
+and expect something like:
 
 ```
 sec   ed25519/0x... [C]
