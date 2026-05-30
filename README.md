@@ -68,9 +68,6 @@ For this 2026 setup I chose the more modern Curve25519-family cryptography with 
 | **stub** | after `keytocard`, the on-disk key becomes a pointer ("stub") to a specific YubiKey serial number. |
 | **User PIN / Admin PIN** | OpenPGP applet PINs. Defaults `123456` / `12345678`. |
 
-> [!IMPORTANT]
-> Need to enable Key Derived Function (KDF) one, **BEFORE** setting PINs or moving keys.
-
 ### Applets
 
 **Applets** - refers to sandboxed Java program running on YubiKey itself. Each key has following applets:
@@ -82,9 +79,6 @@ For this 2026 setup I chose the more modern Curve25519-family cryptography with 
 | **FIDO2 / U2F** | passkeys/WebAuthn, own PIN |
 | **OATH** | TOTP codes |
 | **Yubico OTP** | touch-to-type one-time codes |
-
-> [!NOTE]
-> The YubiKey manager app [ykman](https://www.yubico.com/support/download/yubikey-manager/) is for PIV, not OpenGPG.
 
 </details>
 
@@ -107,7 +101,10 @@ Please note some personal preferences in this guide:
   brew install gnupg ykman pinentry-mac
   ```
 
-### 1. Setup Isolated working directory
+> [!IMPORTANT]
+> Need to enable Key Derived Function (KDF) one, **BEFORE** setting PINs or moving keys.
+
+## Step 1. Setup Isolated working directory
 
 Use `mktemp` to generate in a throwaway `GNUPGHOME`, which will hold our private keys until transferred to YubiKey. This temp directory evaporates on reboot. 
 
@@ -122,7 +119,7 @@ cd "$GNUPGHOME"
 
 ---
 
-### 2. Generate strong Certify passphrase
+## Step 2. Generate strong Certify passphrase
 
 First confirm you are in the temp directory, which should ouput something like this:
 
@@ -138,9 +135,12 @@ LC_ALL=C tr -dc "A-Z2-9" < /dev/urandom | tr -d "IOUS5" | \
     fold -w 4 | paste -sd - - | head -c 29 > "$GNUPGHOME/certify-pass.txt"
 ```
 
-### 3. Generate keys
+## Step 3. Generate keys
 
 Before running commands, set the passfile location and set a few variables for re-use.
+
+> [!IMPORTANT]
+> I set my subkey expiration to 2 years. Replace identity with your name and email.
 
 ```bash
 PASSFILE="$GNUPGHOME/certify-pass.txt"
@@ -210,7 +210,7 @@ ssb   cv25519/0x... [E] [expires: ...]
 
 ---
 
-## 4. Back up — THE LOAD-BEARING STEP
+## Step 4. Back up to USB Stick
 
 Without this backup, you can only provision ONE YubiKey. The backup is what lets the second key get the same subkeys.
 
@@ -510,7 +510,7 @@ cd ~
 echo "$GNUPGHOME"
 ```
 
-> ⚠️ **Look at that output before running the next line.** It should be an internal path like `/var/folders/tc/..../T/tmp.xdRsCAqL8H`. If it shows anything under `/Volumes/`, STOP — `rm -rf` would wipe the backup on the stick. Visually confirming the target of a destructive `rm -rf` is the habit worth building; never run it on a variable you haven't just eyeballed.
+> ⚠️ **Look at that output before running the next line.** It should be an internal path like `/var/folders/tc/..../T/tmp.aB3kPzQ9rN`. If it shows anything under `/Volumes/`, STOP — `rm -rf` would wipe the backup on the stick. Visually confirming the target of a destructive `rm -rf` is the habit worth building; never run it on a variable you haven't just eyeballed.
 
 ```bash
 rm -rf "$GNUPGHOME"                # only after confirming the echo above
@@ -528,8 +528,7 @@ Re-set the variables if the shell was lost. KEYID comes from `keyinfo.txt` (at t
 
 ```bash
 source <(grep '^KEYID=' /Volumes/GPG-Backup/keyinfo.txt)
-export KEYID
-export IDENTITY="Your Name <foo@bar.com>"          # if the shell was lost
+IDENTITY="Your Name <foo@bar.com>"          # if the shell was lost
 ```
 
 After the restore + KEYID source, you're done reading from the stick. **Eject it now using the same 4d procedure** (kill agents → `lsof` empty → `diskutil eject` → confirm `echo "$GNUPGHOME"` is the internal temp dir). Then everything below is identical to step 5 — no eject baked into the middle:
