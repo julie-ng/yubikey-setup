@@ -79,11 +79,12 @@ This guide has 4 parts:
 - [Part II - Configure YubiKey #1](#part-ii---configure-yubikey-1)
 - [Part III - Restore Backup](#part-iii-restore-backup)
 - [Part IV - Configure YubiKey #2](#part-iv-configure-yubikey-2)
+- [Part V - Configure for Daily Use](#part-v-configure-for-daily-use)
 
 Please note some personal preferences in this guide:
 
 - Prefer interactive `--edit-key` over scriptable `--pinentry-mode=loopback` to avoid secrets landing in `.zsh_history`, etc. 
-- I used drdruh's config during setup, but not saved for daily use. In a setup once and forget scenario, I prefer default formats, easier for debugging later.
+- I used drduh's config during setup, but not saved for daily use. In a setup once and forget scenario, I prefer default formats, easier for debugging later.
 
 ### Pre-requisites checklist
 
@@ -640,6 +641,7 @@ and copy the backup and keyinfo from the USB stick to it
 ```bash
 cp -av /Volumes/GPG-Backup/gnupghome-backup/* "$GNUPGHOME"/
 cp /Volumes/GPG-Backup/keyinfo.txt "$GNUPGHOME/keyinfo.txt"
+cp /Volumes/GPG-Backup/$KEYID-pub.asc "$GNUPGHOME/$KEYID-pub.asc"
 ```
 
 Now confirm verify our backup by running
@@ -682,4 +684,120 @@ Confirm you still have variables from [step 3](#step-3-setup-variables)
 - [6F](#6f-disable-yubico-otp-optional) - Disable YubiCo OTP (optional)
 - [6G](#6g-eject-yubikey) Verify and Eject YubiKey
 
-Now both keys carry identical subkeys. Setup Finished! 🎉
+Now both keys carry identical subkeys. 
+
+Setup Finished! 🎉
+
+---
+
+## Part V - Configure for Daily Use
+
+Reset GNUPGHOME to user directory, e.g. `~/.gnupg` by running
+
+```bash
+unset GNUPGHOME
+```
+
+### Step 9 - Setup Keys and Stubs
+
+#### 9A. Import Public Key and Trust Key
+
+Import the public key and trust it ultimately:
+
+```bash
+gpg --import /path/to/$KEYID-pub.asc # temp directory or on USB stick
+gpg --edit-key "$KEYID"
+# trust
+# 5
+# y
+# quit
+```
+
+#### 9B. Create Stubs
+
+Now plug in the YubiKey and run
+
+```bash
+gpg --card-status
+```
+
+which will automatically create the stubs, i.e. running `gpg -K` will show three `ssb>` with the `>` marker.
+
+#### 9C. Configure pinentry
+
+Finally set `GPG_TTY` so pinentry can prompt in the right terminal, by saving this line to `.zshrc` or your preferred config.
+
+```bash
+# .zshrc
+export GPG_TTY=$(tty) 
+```
+
+### Step 10. Configure git commit signing
+
+#### 10A. Configure git 
+
+Now configure git to use YubiKey for signing commits.
+
+```bash
+git config --global user.signingkey "$KEYID"
+git config --global commit.gpgsign true
+git config --global user.email "foo@bar.com" # must match IDENTITY 
+```
+
+> [!IMPORTANT]
+> The `user.email` must match the email configured in `IDENTITY` and added to your GitHub account.
+
+#### 10B. Add GPG Key to GitHub.com
+
+Follow the official GitHub docs on [Adding a GPG key to your GitHub account](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account).
+
+Otherwise you will see "unverified" for your commits.
+
+Write and push a test commit to see the results:
+
+```bash
+git commit --allow-empty -m "testing git commit signature"
+git push
+```
+
+
+### Step 11 - Reencrypt `.netrc`
+
+First decrypt the `.netrc.gpg` file with old key. Or create a new `.netrc` file from scratch with new personal access tokens (PAT).
+
+Then encrypt it with your new keys, using `$KEYID` - not email (which is identical to old key).
+
+```bash
+gpg --encrypt --recipient "$KEYID" -o ~/.netrc.gpg ~/.netrc
+```
+
+Now remove the plain text file
+
+```bash
+rm .netrc
+```
+
+If configured properly, when doing `git push` to GitHub, you'll be prompted for your PIN and to touch the YubiKey's gold contact.
+
+---
+
+## Troubleshooting
+
+### Switching YubiKeys - Please insert card…
+
+When switching keys, it's possible you'll enter a  "Please insert the card with serial number …" message because each YubiKey has a unique serial number.
+
+In my case, ignoring the serial number and proceeding straight to entering the PIN worked fine.
+
+If you need to re-point gpg to the newly inserted stick, run
+
+```bash
+gpg-connect-agent "scd serialno" "learn --force" /bye
+```
+
+If this happens often, consider creating an alias, e.g. `yk-switch`.
+
+## References
+
+- [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide) - definitive community guide for using YubiKeys with GnuPG and SSH.
+- GitHub Docs: [Adding a GPG key to your GitHub account](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account).
