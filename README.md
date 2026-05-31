@@ -77,9 +77,9 @@ This guide has 4 parts:
 
 - [Part I - Setup, Generate Keys](#part-i---setup-generate-keys)
 - [Part II - Configure YubiKey #1](#part-ii---configure-yubikey-1)
-- [Part III - Restore Backup](#part-iii-restore-backup)
-- [Part IV - Configure YubiKey #2](#part-iv-configure-yubikey-2)
-- [Part V - Configure for Daily Use](#part-v-configure-for-daily-use)
+- [Part III - Restore Backup](#part-iii---restore-backup)
+- [Part IV - Configure YubiKey #2](#part-iv---configure-yubikey-2)
+- [Part V - Configure for Daily Use](#part-v---configure-for-daily-use)
 
 Please note some personal preferences in this guide:
 
@@ -595,7 +595,7 @@ It should show no processes. Now remove YubiKey #1.
 
 ---
 
-## Part III. Restore Backup
+## Part III - Restore Backup
 
 Since the `keytocard` operation removed the private keys from local disk, we need to restore the `GNUPGHOME` contents from the USB stick backup.
 
@@ -663,7 +663,7 @@ diskutil eject /Volumes/GPG-Backup
 
 ---
 
-## Part IV. Configure YubiKey #2
+## Part IV - Configure YubiKey #2
 
 ### Step 8. Configure YubiKey #2 (NFC)
 
@@ -759,7 +759,6 @@ Write and push a test commit to see the results:
 git commit --allow-empty -m "testing git commit signature"
 git push
 ```
-
 
 ### Step 11 - Reencrypt `.netrc`
 
