@@ -73,6 +73,13 @@ _Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but ada
 
 # Setup Instructions
 
+This guide has 4 parts:
+
+- [Part I - Setup, Generate Keys](#part-i---setup-generate-keys)
+- [Part II - Configure YubiKey #1](part-ii---configure-yubikey-1)
+- [Part III - Restore Backup](#phase-iii-restore-backup)
+- [Part IV - Configure YubiKey #2](#phase-iv-configure-yubikey-2)
+
 Please note some personal preferences in this guide:
 
 - Prefer interactive `--edit-key` over scriptable `--pinentry-mode=loopback` to avoid secrets landing in `.zsh_history`, etc. 
@@ -88,7 +95,7 @@ Please note some personal preferences in this guide:
   brew install gnupg ykman pinentry-mac
   ```
 
-## Phase I - Setup, Generate Keys
+## Part I - Setup, Generate Keys
 
 ### Step 1. Setup Isolated working directory
 
@@ -335,9 +342,9 @@ Pull the stick out of the computer for good measure. We'll plug it back in later
 
 ---
 
-## Phase II - Configure Yubikey #1 
+## Part II - Configure Yubikey #1 
 
-This phase configures my daily driver, the [YubiKey 5C Nano](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nano/).
+This part configures my daily driver, the [YubiKey 5C Nano](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nano/).
 
 ### OpenGPG Requirements
 
@@ -587,7 +594,7 @@ It should show no processes. Now remove YubiKey #1.
 
 ---
 
-## Phase III. Restore Backup
+## Part III. Restore Backup
 
 Since the `keytocard` operation removed the private keys from local disk, we need to restore the `GNUPGHOME` contents from the USB stick backup.
 
@@ -654,7 +661,7 @@ diskutil eject /Volumes/GPG-Backup
 
 ---
 
-## Phase IV. Configure YubiKey #2
+## Part IV. Configure YubiKey #2
 
 ### Step 8. Configure YubiKey #2 (NFC)
 
@@ -672,7 +679,7 @@ Confirm you still have variables from [step 3](#step-3-setup-variables)
 - [6C](#6c-set-card-attributes-login-and-name) - Set login and name attributes
 - [6D](#6d-transfer-subkeys-to-the-yubikey) - Transfer subkeys to the YubiKey
 - [6E](#6e-require-touch-per-operation-recommended) - Require touch per operation (optional, but recommended)
-- [6F](#6f-disable-yubico-otp-optional) - Disable YubiCo OTP
-- [6G](#6g-verify-and-eject-yubikey) Verify and Eject YubiKey
+- [6F](#6f-disable-yubico-otp-optional) - Disable YubiCo OTP (optional)
+- [6G](#6g-eject-yubikey) Verify and Eject YubiKey
 
 Now both keys carry identical subkeys. Setup Finished! 🎉
