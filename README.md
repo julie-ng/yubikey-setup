@@ -14,7 +14,7 @@ _Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but ada
 - **Accounts not Hackable without Physical Access**: 
   - All private keys stored offline (encrypted USB or YubiKey)
   - YubiKey configured to require PIN and physical touch on  the gold contact to authorize operations
-  - Config Key Derived Function (KDF) to ensure PINs are hashed when crossing USB bus
+  - Config Key Deriviation Function (KDF) to ensure PINs are hashed when crossing USB bus
 - Certify passphrase is stored in password manager, separate from USB stick (two factor)
 
 ### Two YubiKeys
@@ -51,7 +51,7 @@ _Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but ada
 | **Subkey** | `[S]` sign, `[E]` encrypt, `[A]` authenticate. |
 | **ed25519** | elliptic-curve algorithm for SIGNING and SSH auth. Cannot encrypt. |
 | **cv25519** | (Curve25519 / X25519) Algorithm used for ENCRYPTION. |
-| **KDF** | Key Derived Function. Makes the YubiKey hash the PIN on the host before sending it to the card, so the PIN isn't transmitted in plaintext. |
+| **KDF** | Key Deriviation Function. Makes the YubiKey hash the PIN on the host before sending it to the card, so the PIN isn't transmitted in plaintext. |
 | **stub** | after `keytocard`, the on-disk key becomes a pointer ("stub") to a specific YubiKey serial number. |
 | **User PIN / Admin PIN** | OpenPGP applet PINs. Defaults `123456` / `12345678`. |
 
@@ -88,7 +88,7 @@ Please note some personal preferences in this guide:
   brew install gnupg ykman pinentry-mac
   ```
 
-## Phase 1 - Setup, Generate Keys
+## Phase I - Setup, Generate Keys
 
 ### Step 1. Setup Isolated working directory
 
@@ -335,17 +335,34 @@ Pull the stick out of the computer for good measure. We'll plug it back in later
 
 ---
 
-## Phase 2 - Configure Yubikey #1 
+## Phase II - Configure Yubikey #1 
 
-### Step 6. Configure + load YubiKey #1 (nano)
+This phase configures my daily driver, the [YubiKey 5C Nano](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nano/).
 
-Plug in the nano. Confirm it's seen:
+### OpenGPG Requirements
+
+> [!TIP]
+> A YubiKey has multiple applets and thus multiple PINs. This section refers to the OpenGPG applet. Do not confuse with PIV.
+
+Before continuing note the following requirements. We're using the default PINs for setup, so we can pass it inline in bash.
+
+- [ ] OpenGPG applet is in factory state
+- [ ] OpenGPG User PIN is default `123456` 
+- [ ] OpenGPG Admin PIN is default `12345678`
+
+During setup, you'll change the PINs.
+
+### Step 6. Configure YubiKey (nano)
+
+Plug in the nano. Confirm it's visible:
 
 ```bash
 gpg --card-status
 ```
 
-#### 6A. Enable KDF FIRST (before PINs, before keys)
+#### 6A. Enable KDF First
+
+The Key Derivation Function (KDF) hashes PINs so they never cross the USB bus in plaintext. Enable KDF **FIRST**, before changing PINs or moving keys:
 
 ```bash
 gpg --command-fd=0 --pinentry-mode=loopback --card-edit <<EOF
@@ -355,27 +372,39 @@ kdf-setup
 EOF
 ```
 
-> If you get `Conditions of use not satisfied`, the card already had PINs/keys changed — KDF must be first on a fresh applet. On a factory-state applet this works.
->
-> Note the `12345678` in the heredoc is the *default* Admin PIN — this only works because KDF runs BEFORE 5b changes the PIN. Order matters: KDF (5a) → change PINs (5b) → login + keytocard (5c/5d). If you ever reorder, this hardcoded default breaks.
+##### Troubleshooting
 
-#### 6B. Change PINs off defaults
+If you get `Conditions of use not satisfied`, the card already had PINs/keys changed — KDF must be first on a fresh applet by running `ykman openpgp reset`.
 
-Pick values and save them in 1Password. User PIN ≥ 6 digits, Admin PIN ≥ 8.
+#### 6B. Change PINs from defaults
+
+Now pick secure PINs that meet the requirements:
+
+- User PIN: min. 6 digits
+- Admin PIN: min. 8 digits
+
+> [!NOTE]
+> The rest of the guide mostly uses manual interactive steps with `gpg --card-edit`, which avoids secrets in the bash history and better for intentionality and learning.
+
+Run the edit command
 
 ```bash
-# interactive is fine and clearer here:
 gpg --card-edit
-# then:
-#   admin
-#   passwd
-#   1  -> change User PIN  (default 123456)
-#   3  -> change Admin PIN (default 12345678)
-#   q
-#   quit
 ```
 
-> Save in 1Password: "YubiKey nano — OpenPGP User PIN / Admin PIN".
+Then at the `gpg/card>` prompt, type the subcommands, e.g. `admin` and the corresponding options, e.g. `2`
+
+```bash
+gpg/card>
+admin
+passwd
+1  # change User PIN  (default 123456)
+3  # change Admin PIN (default 12345678)
+q
+quit
+```
+
+Save your chosen PINs in your password manager.
 
 #### 6C. Set card attributes: login (required) + holder name (optional)
 
@@ -385,47 +414,60 @@ Do this **interactively** — these are admin-authorized writes, so the card nee
 gpg --edit-card
 ```
 
-Then at the `gpg/card>` prompt:
+Then at the `gpg/card>` prompt, type:
 
-```
-admin
-login        # REQUIRED. Prompts for login data — type your identity, e.g.
+```bash
+gpg/card>
+admin        # to run Admin operations
+login        # Type your identity, e.g.
              #   Your Name <foo@bar.com>
-name         # OPTIONAL. Prompts for Surname then Given name SEPARATELY:
+name         # Prompts for Surname then Given name SEPARATELY:
              #   Surname:    Doe
-             #   Given name: Jane
-             # (shows up as "Holder:" in the pinentry dialog — handy for telling
-             #  the two cards apart at a glance)
+             #   Given name: Jane      
+lang         # e.g. "en"
+salutation   # e.g. "Ms."
 quit
 ```
 
-You'll be prompted for the **Admin PIN** to authorize the writes (cached after the first, so likely once for both).
+When prompted, enter your **Admin PIN** to authorize and save the changes.
 
-> Both `login` and `name` are **card attributes** (like PINs and touch policy), not key material — set them per-card. So you'll set the name again on the 5C NFC in step 6. The OpenPGP `name` field is length-limited (surname + given name, ~39 chars total); long names get truncated.
+##### Troubleshooting
 
-> If you see `Bad PIN`, you're either entering the wrong Admin PIN or (if scripted) supplying none. Check `ykman openpgp info` → `Admin PIN tries remaining` — it starts at 3, and hitting 0 locks the Admin PIN (recoverable only via `ykman openpgp reset`, which wipes the applet). Don't brute-force it; stop and verify the PIN first.
+If you get `Bad PIN`, double check and do not brute force. You only have **3 attempts**, after which you need to reset the OpenGPG applet. To check how many attempts are remining, run `ykman openpgp info.
 
-#### 6D. Transfer subkeys to the card (keytocard)
+#### 6D. Transfer subkeys to the YubiKey
 
-The stick is already ejected (step 4d), so `keytocard` physically cannot harm the backup — an unmounted volume can't be modified. `keytocard` is **destructive** to the on-disk keys (each subkey becomes a stub pointing at the card), which is fine because the backup is safe on the ejected stick.
-
-**Confirm you're on the temp dir**, then transfer. Use plain interactive `--edit-key` — do NOT use `--pinentry-mode=loopback` here. `keytocard` needs TWO secrets (the Certify passphrase to unlock the on-disk key, AND the YubiKey Admin PIN to authorize the card write), and loopback can only feed the passphrase via `--passphrase-file` — it has no way to supply the Admin PIN, so it fails with `KEYTOCARD failed: Bad PIN`. Plain interactive mode routes both through the pinentry-mac dialog:
+First confirm we're still in our temp directory, e.g. `/var/folders/.../T/tmp.XXXXX`
 
 ```bash
-echo "$GNUPGHOME"                # sanity: should be /var/folders/.../T/tmp.XXXXX
-gpg -K                           # sanity: full ssb keys, NO ">" yet
-gpg --edit-key "$KEYID"          # NO --pinentry-mode, NO --passphrase-file
+echo "$GNUPGHOME"                
 ```
 
-> **The two secrets and how to tell them apart** — during `keytocard` you'll be prompted for both, and reading the wording is the only reliable way to know which is which:
-> - "Please enter your passphrase, so that the secret key can be **unlocked** for this session" → the **Certify passphrase** (the long `XXXX-XXXX-…` string from `"$GNUPGHOME/certify-pass.txt"` / 1Password). NOT the Admin PIN.
-> - A prompt referencing the **Admin PIN** or the card/serial → the YubiKey **Admin PIN** (the one set in 5b). This authorizes the card write.
->
-> GPG usually **caches** the Certify passphrase after the first unlock, so subkeys 2 and 3 may only prompt for the Admin PIN (or nothing, if that's cached too). Fewer prompts later = normal caching, not a skipped step.
->
-> Pasting the wrong secret into a prompt gives a Bad-PIN/bad-passphrase error and decrements a counter — read each prompt before typing.
+> [!CAUTION]
+> The `keytocard` method **deletes** on-disk keys after moving them to the YubiKey. It is not possible to recover private keys from YubiKeys. Only proceed after creating keyring backup in step 5.
 
-Then at the `gpg>` prompt. **First type `list`** to see the subkey order — positions count from the top with the primary as 0. For this keyset the order is:
+Before we continue, note that each `keytocard` operation, you will need **two (2) secrets**
+
+- **Certify passphrase** - look up in your password manager
+- **Admin PIN** - set in step 6B above
+
+GPG might cache the passphrase. But when I moved my keys, I had to type the long `XXXX-XXXX` each time.
+
+Now, we'll make the changes _interactively_.
+
+```bash
+gpg -K
+gpg --edit-key "$KEYID"
+```
+
+First, **confirm the subkey order** by typing `list`
+
+```bash
+gpg/card>
+list
+```
+
+which shows is zero-indexed key order:
 
 ```
 sec  ...usage: C    <- position 0 (primary)
@@ -434,39 +476,52 @@ ssb  ...usage: A    <- position 2 (authentication)
 ssb  ...usage: E    <- position 3 (encryption)
 ```
 
-> Selection is shown by a `*` next to the line (e.g. `ssb*`), NOT an arrow UI. `key N` takes the position NUMBER (not the usage letter — `key s` does nothing useful). Typing `key N` again toggles it OFF. Before each `keytocard`, run `list` and confirm exactly ONE subkey shows `*`.
+##### Selecting (and deselecting) Keys
 
-Go one subkey at a time, verifying selection each time:
+Now, we'll move the keys one at a time, which requires selection **_and_** deselection:
 
-```
-key 1          # select signing [S]
-list           # confirm ONLY the usage:S line shows ssb*
-keytocard      # choose slot 1 (Signature key)   <- enter Admin PIN when prompted
-key 1          # deselect
+- Type `key 1` to select key 1 (e.g. signing)
+- Run commands
+- Type `key 1` again to deselect the key. Note the ❗️ below.
 
-key 2          # select authentication [A]
-list           # confirm ONLY the usage:A line shows ssb*
-keytocard      # choose slot 3 (Authentication key)
-key 2          # deselect
 
-key 3          # select encryption [E]
-list           # confirm ONLY the usage:E line shows ssb*
-keytocard      # choose slot 2 (Encryption key)
-key 3          # deselect
+##### Move keys with `keytocard` 
+
+> [!WARNING]
+> Selection is shown by an asterisk `*` next to the line (e.g. `ssb*`). **For each `keytocard`, run `list` and confirm that exactly **one** subkey shows the asterisk `*`.
+
+```bash
+key 1          # Select signing [S]
+list           # Confirm ONLY the usage:S line shows ssb*
+keytocard      # Choose slot 1 (Signature key)   <- enter Admin PIN when prompted
+key 1          # ❗️Deselect [S]
+
+key 2          # Select authentication [A]
+list           # Confirm ONLY the usage:A line shows ssb*
+keytocard      # Choose slot 3 (Authentication key)
+key 2          # ❗️Deselect [A]
+
+key 3          # Select encryption [E]
+list           # Confirm ONLY the usage:E line shows ssb*
+keytocard      # Choose slot 2 (Encryption key)
+key 3          # ❗️Deselect [E]
 
 save
+quit
 ```
 
-> Gotchas:
-> - **Slot numbers ≠ list positions.** By card slot/function: Signature→**1**, Encryption→**2**, Authentication→**3**. gpg's prompt names each slot — read the prompt and match by NAME, not by my numbers.
-> - **One `*` at a time.** Toggle each subkey off before selecting the next.
-> - **Admin PIN** (not User PIN) is requested during `keytocard` — it authorizes the card write.
-> - If your `list` shows a different order than above, follow YOUR order — match by the `usage:` letter, not the position number.
-
-Verify the subkeys now show `ssb>` (the `>` = on smartcard):
+After typing `save` and quitting, we can verify subkeys are now moved by running:
 
 ```bash
 gpg -K
+```
+
+which should now show three `ssb>` with the greater-than `>` marker, indicating the key is not on-disk and instead on the YubiKey
+
+```
+ssb>   ed25519... [S] [expires: ...]
+ssb>   ed25519... [A] [expires: ...]
+ssb>   cv25519... [E] [expires: ...]
 ```
 
 #### 6E. (Recommended) require touch per operation
