@@ -476,7 +476,7 @@ ssb  ...usage: A    <- position 2 (authentication)
 ssb  ...usage: E    <- position 3 (encryption)
 ```
 
-##### Selecting (and deselecting) Keys
+**Selecting (and deselecting) Keys**
 
 Now, we'll move the keys one at a time, which requires selection **_and_** deselection:
 
@@ -484,11 +484,10 @@ Now, we'll move the keys one at a time, which requires selection **_and_** desel
 - Run commands
 - Type `key 1` again to deselect the key. Note the ❗️ below.
 
-
-##### Move keys with `keytocard` 
+**Finally, move keys with `keytocard` command**
 
 > [!WARNING]
-> Selection is shown by an asterisk `*` next to the line (e.g. `ssb*`). **For each `keytocard`, run `list` and confirm that exactly **one** subkey shows the asterisk `*`.
+> Selection is shown by an asterisk `*` next to the line (e.g. `ssb*`). For each `keytocard`, run `list` and confirm that exactly **one** subkey shows the asterisk `*`.
 
 ```bash
 key 1          # Select signing [S]
@@ -510,7 +509,7 @@ save
 quit
 ```
 
-After typing `save` and quitting, we can verify subkeys are now moved by running:
+After typing `save` and `quit`, we can verify subkeys are now moved by running:
 
 ```bash
 gpg -K
@@ -524,20 +523,24 @@ ssb>   ed25519... [A] [expires: ...]
 ssb>   cv25519... [E] [expires: ...]
 ```
 
-#### 6E. (Recommended) require touch per operation
+#### 6E. Require touch per operation (Recommended)
 
-By default the OpenPGP applet signs/decrypts/authenticates using just the cached PIN — **no touch needed**. (This is separate from FIDO2's always-on passkey touch; different applet.) That means with the nano permanently plugged in and the PIN cached, any process running as you could ask the card to sign/decrypt silently. A touch policy breaks that: the card won't perform the operation until a human physically taps it — malware can't fake a finger. Worth enabling *because* the nano lives plugged in.
+Because the YubiKey nano lives plugged-in to my computer (susceptible to malware with cached PIN), I also want to **require physically touch** on operations.
 
-**Modes** (set per operation, and per YubiKey — these live on the card, not the keys, so they don't affect redundancy):
+This way, the PIN may be cached, but each operation still needs a touch.
 
-| Mode | Behavior | Use when |
-|------|----------|----------|
-| `off` | No touch; cached PIN is enough | default; not recommended for an always-plugged-in key |
-| `on` | Touch required for **every** operation | rare, high-value ops where per-op confirmation is cheap |
-| `cached` | Touch required, then a ~15s window where further ops need no re-touch | frequent ops (signing during a rebase = one tap for the burst) |
-| `fixed` | Like `on`, but **can't be changed** without wiping the applet | avoid while tuning — removes your ability to adjust later |
+**Touch Modes**
 
-**Recommended for this setup:**
+YubiKey offers 4 different modes:
+
+| Mode | Behavior | 
+|------|----------|
+| `off` | No touch; cached PIN is enough |
+| `on` | Touch required for **every** operation |
+| `cached` | Touch required, then a ~15s window where further ops need no re-touch | 
+| `fixed` | Like `on`, but **can't be changed** without wiping the applet |
+
+I am choosing `cached` because I don't want to have to touch it 10 times if I am rebasing 10 commits. Instead I'll leverage the 15 second cache window.
 
 ```bash
 ykman openpgp keys set-touch sig cached   # signing: frequent → cached (one tap per burst)
@@ -545,36 +548,19 @@ ykman openpgp keys set-touch aut cached   # SSH auth: occasional → cached
 ykman openpgp keys set-touch dec cached   # decryption: frequent (.netrc) → cached
 ```
 
-Each prompts for the **Admin PIN**.
+When prompted, enter your **Admin PIN**.
 
-Reasoning:
-- **`sig` → `cached`:** commit signing is your highest-frequency op. `cached` still blocks silent background signing (malware can't get the first touch), but a rebase or rapid commits only cost ONE tap thanks to the ~15s window. Avoids the per-commit nag.
-- **`aut` → `cached`:** SSH auth is less frequent; same logic, one tap covers a working session.
-- **`dec` → `cached`:** if you use `.netrc.gpg` for git credentials, **every** git push/pull over HTTPS decrypts it — with `dec on` that's a tap on every git operation, which gets old fast. `cached` keeps the protection (malware still can't get the first tap to decrypt your credentials silently) while letting a burst of git commands cost one tap. Use `dec on` instead only if you decrypt rarely and want max protection.
-- **Avoid `fixed`** until you know your tolerance — it's `on` you can't undo without `ykman openpgp reset`.
+#### 6F. Disable Yubico OTP (Optional)
 
-> To change a policy later (e.g. you started with `dec on` and it taps too often): `ykman openpgp keys set-touch dec cached` — same command, prompts for Admin PIN, takes effect immediately. As long as you never used `fixed`, you can always relax or tighten. Per-card, so change it on each YubiKey you want affected.
-
-> Per-key, not per-subkey: you set this again on the 5C NFC in step 6, and can choose differently (e.g. stricter `on` for `sig` on the travel key since it leaves the house). The subkeys are identical either way — only the touch gate differs.
-
-#### 6F. (Optional) disable Yubico OTP
-
-The YubiKey's **Yubico OTP** applet types a one-time password (a long `cccccc…`-prefixed string) whenever its contact is touched while a text field has focus. On an always-plugged-in nano this fires by accident now and then — bumping the key dumps an OTP into whatever field has focus (a chat box, a terminal, a commit message). It's harmless (a single OTP is useless out of context and single-use) but annoying.
-
-If you don't use Yubico OTP for anything, disable it:
+Because I don't use Yubico OTP (outputs long `cccccc…`-prefixed string) and I occassionally accidentally brush the gold contact of the nano that lives plugged in, I'm going to disable it:
 
 ```bash
 ykman config usb --disable OTP
 ```
 
-> - Reversible: re-enable later with `ykman config usb --enable OTP`.
-> - This disables OTP over USB. Add `--disable OTP` under `ykman config nfc …` too if you want it off over NFC as well (relevant for the 5C NFC, not the nano).
-> - Does NOT affect OpenPGP, FIDO2, PIV, or OATH — only the OTP applet.
-> - Accidental touches will then do nothing instead of emitting an OTP.
+#### 6G. Verify and Eject YubiKey
 
-#### 6G. Finish with the nano (verify, eject, clean up agents)
-
-The nano is fully provisioned. Before moving to the 5C NFC, confirm the result and clear agent state so step 6 starts clean.
+The first YubiKey (nano) is fully provisioned. Before moving to the 5C NFC, confirm the result and clear agent state so step 6 starts clean.
 
 ```bash
 # 1. Final confirmation the nano has all three subkeys
@@ -597,6 +583,12 @@ ps aux | grep -iE "scdaemon" | grep -v grep   # expect empty — no squatters le
 ```
 
 > At this point your temp-dir keyring holds **stubs** pointing at the nano (the full subkeys were consumed by `keytocard`). That's expected. Step 6 wipes this temp dir and restores **full** keys from the stick so the 5C NFC can receive the same subkeys.
+
+---
+
+## Phase III. Restore Backup
+
+## Phase IV. Configure YubiKey #2
 
 ---
 
