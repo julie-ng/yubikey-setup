@@ -76,9 +76,9 @@ _Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but ada
 This guide has 4 parts:
 
 - [Part I - Setup, Generate Keys](#part-i---setup-generate-keys)
-- [Part II - Configure YubiKey #1](part-ii---configure-yubikey-1)
-- [Part III - Restore Backup](#phase-iii-restore-backup)
-- [Part IV - Configure YubiKey #2](#phase-iv-configure-yubikey-2)
+- [Part II - Configure YubiKey #1](#part-ii---configure-yubikey-1)
+- [Part III - Restore Backup](#part-iii-restore-backup)
+- [Part IV - Configure YubiKey #2](#part-iv-configure-yubikey-2)
 
 Please note some personal preferences in this guide:
 
