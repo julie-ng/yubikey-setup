@@ -406,7 +406,7 @@ quit
 
 Save your chosen PINs in your password manager.
 
-#### 6C. Set card attributes: login (required) + holder name (optional)
+#### 6C. Set card attributes: login and name
 
 Do this **interactively** — these are admin-authorized writes, so the card needs the **Admin PIN**. A heredoc with `--pinentry-mode=loopback` supplies no PIN and fails with `error setting login data: Bad PIN`. Interactive prompts for the Admin PIN properly (via pinentry) and keeps the PIN off the command line. Both attributes are set in the same session:
 
@@ -558,339 +558,121 @@ Because I don't use Yubico OTP (outputs long `cccccc…`-prefixed string) and I 
 ykman config usb --disable OTP
 ```
 
-#### 6G. Verify and Eject YubiKey
+The first YubiKey (nano) is fully provisioned. 
 
-The first YubiKey (nano) is fully provisioned. Before moving to the 5C NFC, confirm the result and clear agent state so step 6 starts clean.
+#### 6G. Eject YubiKey
+
+Before we eject the YubiKey, you can save the serial number. Please note that although both YubiKeys will have identical GPG keys, they will have separate serial numbers.
 
 ```bash
-# 1. Final confirmation the nano has all three subkeys
-gpg -K                    # three ssb> lines, each with "Card serial no." = nano's
-
-# 2. (optional) note the nano's OpenPGP card serial for your records
 gpg --card-status | grep -i "serial"
-
-# 3. Physically remove the nano — no "safe eject" needed for a YubiKey
-#    (that ceremony is only for storage volumes like the backup stick)
-
-# 4. Kill all gpg-agents AND scdaemons so nothing stays pinned to this temp dir,
-#    the nano's cached state, or the card's USB interface. `gpgconf --kill all` only
-#    reaps daemons for the CURRENT $GNUPGHOME — a scdaemon spawned against a temp dir
-#    can survive bound to that (now-dead) homedir and squat on the card, causing
-#    "selecting card failed: Operation not supported by device" later. `pkill` clears
-#    them regardless of homedir.
-gpgconf --kill all 2>/dev/null; pkill gpg-agent; pkill scdaemon; sleep 1
-ps aux | grep -iE "scdaemon" | grep -v grep   # expect empty — no squatters left
 ```
 
-> At this point your temp-dir keyring holds **stubs** pointing at the nano (the full subkeys were consumed by `keytocard`). That's expected. Step 6 wipes this temp dir and restores **full** keys from the stick so the 5C NFC can receive the same subkeys.
+Now we need to kill all agents and daemons with open sockets to our temp directory or card interface.
+
+```bash
+gpgconf --kill all 2>/dev/null
+pkill gpg-agent
+pkill scdaemon
+sleep 1
+```
+
+Now confirm there are no `scdaemon`s left.
+
+```bash
+ps aux | grep -iE "scdaemon" | grep -v grep
+```
+
+It should show no processes. Now remove YubiKey #1.
 
 ---
 
 ## Phase III. Restore Backup
 
-## Phase IV. Configure YubiKey #2
+Since the `keytocard` operation removed the private keys from local disk, we need to restore the `GNUPGHOME` contents from the USB stick backup.
 
----
+### Step 7 - Restore Backup
 
-## 6. Load YubiKey #2 (5C NFC)
+#### 7A. Insert USB Stick
 
-Picking up from 5g: agents are killed, the nano is out, and the temp dir holds stubs. Now restore full keys from the backup so the 5C NFC can receive the *same* subkeys.
-
-**Re-insert the backup stick** (you ejected it in 4d) and unlock it:
+Insert the USB Stick. Enter the encryption password (set outside this guide) and confirm you have the backup folder `gnupghome-backup`
 
 ```bash
-ls /Volumes/GPG-Backup/          # confirm you see: gnupghome-backup
+ls /Volumes/GPG-Backup/         
 ```
 
-Then restore into a FRESH temp dir:
+#### 7B. Delete existing temp directory
+
+To ensure a clean restore, we will delete the previous temp directory.
+
+First, confirm that your `$GNUPGHOME` still points to your temp directory. Run
 
 ```bash
-# Step out of the dir first — you can't cleanly delete a directory you're standing in
-# (back in step 1 you cd'd into $GNUPGHOME to fetch gpg.conf):
-cd ~
-
-# Confirm $GNUPGHOME points at the INTERNAL temp dir before deleting it:
 echo "$GNUPGHOME"
 ```
 
-> ⚠️ **Look at that output before running the next line.** It should be an internal path like `/var/folders/tc/..../T/tmp.aB3kPzQ9rN`. If it shows anything under `/Volumes/`, STOP — `rm -rf` would wipe the backup on the stick. Visually confirming the target of a destructive `rm -rf` is the habit worth building; never run it on a variable you haven't just eyeballed.
+which should show something like `/var/folders/tc/..../T/tmp.aB3kPzQ9rN`.
+
+Then change directories, e.g. go to your home directory and remove the existing temp directory
 
 ```bash
-rm -rf "$GNUPGHOME"                # only after confirming the echo above
+cd ~
+rm -rf "$GNUPGHOME"
+```
+
+#### 7C. Re-create temp directory
+
+Now we'll create a fresh `GNUPGHOME`
+
+```bash
 export GNUPGHOME=$(mktemp -d)
+```
+
+and copy the backup and keyinfo from the USB stick to it
+
+```bash
 cp -av /Volumes/GPG-Backup/gnupghome-backup/* "$GNUPGHOME"/
-gpg -K   # CHECKPOINT: must show full ssb keys (NO ">"). If you see ssb>, STOP —
-         # the restore pulled stubs, not full keys.
+cp /Volumes/GPG-Backup/keyinfo.txt "$GNUPGHOME/keyinfo.txt"
 ```
 
-> ⚠️ This restores into a NEW temp dir, so `$GNUPGHOME` now has a different basename than in step 5. That's expected.
-
-The helpers (`certify-pass.txt`, `keyinfo.txt`, `<KEYID>-pub.asc`) live at the **stick root** as siblings of `gnupghome-backup/` (set up that way in step 4), so the `cp` above restores a clean keyring without them — which is correct. You don't need the passphrase file restored: keytocard prompts for it interactively via pinentry (paste from 1Password). The public-key sibling is there if you need to re-import it.
-
-Re-set the variables if the shell was lost. KEYID comes from `keyinfo.txt` (at the stick root). The passphrase doesn't need a shell variable — you'll type it at the pinentry prompt during keytocard:
+Now confirm verify our backup by running
 
 ```bash
-source <(grep '^KEYID=' /Volumes/GPG-Backup/keyinfo.txt)
-IDENTITY="Your Name <foo@bar.com>"          # if the shell was lost
+gpg -K
 ```
 
-After the restore + KEYID source, you're done reading from the stick. **Eject it now using the same 4d procedure** (kill agents → `lsof` empty → `diskutil eject` → confirm `echo "$GNUPGHOME"` is the internal temp dir). Then everything below is identical to step 5 — no eject baked into the middle:
+and all 3 subkeys should show `ssb` _without_ any greater-than `>` symbol.
 
-Plug in the 5C NFC (remove the nano first), then run **5a–5g** against it exactly as for the nano:
+#### 7D. Kill Agents and Eject USB Stick
 
-- 5a — KDF setup
-- 5b — Change User/Admin PINs (can be same values as the nano or different — your call; save in 1Password either way, labeled "YubiKey 5C NFC")
-- 5c — Set card attributes: login (required) + holder name (optional), via interactive `gpg --edit-card`. Set the name on this card too if you set it on the nano.
-- 5d — `keytocard` the three subkeys (plain `gpg --edit-key "$KEYID"`, NO loopback; Certify passphrase + Admin PIN at the pinentry prompts). Stick is already ejected.
-- verify `gpg -K` shows `ssb>`
-- 5e — Touch policy. Consider stricter settings here since the 5C NFC travels.
-- 5f — Disable OTP if you want — for the 5C NFC, add the NFC variant too: `ykman config nfc --disable OTP`
-- Finish (5g): verify, remove the 5C NFC, kill agents
-
-Now both keys carry identical subkeys.
-
-> Re-insert the stick afterward only if you still need it (e.g. to keep the backup updated). For daily use in step 7 you don't need the stick at all.
-
----
-
-## 7. Daily-use setup (your real ~/.gnupg)
-
-Switch back to your normal environment (you can `unset GNUPGHOME` or open a new shell).
-
-Import the public key and trust it ultimately:
+Run the same steps from [5E](#5e-eject-the-stick) above. See step for full instructions.
 
 ```bash
-gpg --import /path/to/$KEYID-pub.asc   # or: gpg --recv-keys $KEYID if published
-gpg --edit-key "$KEYID"
-# trust
-# 5
-# y
-# quit
-```
-
-With a YubiKey plugged in, create the stub:
-
-```bash
-gpg --card-status
-```
-
-**Agent config — skipped on purpose.** This setup keeps GnuPG's defaults: no `gpg.conf` and no `gpg-agent.conf`. The drduh configs offer crypto-preference pinning (largely redundant on modern GnuPG) and cosmetic listing formatting — not worth it for light signing/encryption use. Pinentry already works via the build default (`/opt/homebrew/bin/pinentry`, which auto-selects the terminal frontend when invoked from a TTY). No agent restart is needed because no config changed.
-
-> If you ever sign commits from a **pure-GUI tool** (not a terminal) and hit a `No pinentry` / `Inappropriate ioctl for device` error, that's the terminal-only frontend having no TTY to attach to. Fix is one line — pin the GUI pinentry:
-> ```bash
-> echo "pinentry-program /opt/homebrew/bin/pinentry-mac" >> ~/.gnupg/gpg-agent.conf
-> gpgconf --kill gpg-agent     # reload after the change
-> ```
-> (Intel Mac: `/usr/local/bin/pinentry-mac`.) Until that happens, nothing to do.
-
-Add to your shell rc (`~/.zshrc`):
-
-```bash
-export GPG_TTY=$(tty)    # helps the terminal pinentry attach to the right TTY
-alias yk-switch='gpg-connect-agent "scd serialno" "learn --force" /bye'  # see step 9
+gpgconf --kill all 2>/dev/null; pkill gpg-agent; sleep 1
+diskutil eject /Volumes/GPG-Backup
 ```
 
 ---
 
-## 8. Git config + test
+## Phase IV. Configure YubiKey #2
 
-```bash
-git config --global user.signingkey "$KEYID"
-git config --global commit.gpgsign true
-git config --global user.email "foo@bar.com"           # must match the key's UID + GitHub
-```
+### Step 8. Configure YubiKey #2 (NFC)
 
-> **Why `user.signingkey` is needed now (it may not have been before).** Without it, GPG picks a signing key implicitly — historically by matching `user.email` to a key's UID. That worked in the past when each key had a **distinct email/identity**: the email uniquely disambiguated which key to use, so `signingkey` was redundant. It's needed now because (a) there are **multiple secret keys** in the keyring (old + new), and (b) this setup uses a **single identity** across both new YubiKeys, so email no longer uniquely selects a key. With ambiguity present, implicit selection can silently sign with the *wrong* key (a wrong-key signature still succeeds — no error). Setting `signingkey` explicitly guarantees the new key is used. Passing the primary key ID is enough; GPG auto-uses its `[S]` subkey.
+#### Confirm Variables 
 
-Add the public key to GitHub: Settings → SSH and GPG keys → New GPG key → paste the contents of `$KEYID-pub.asc`.
+Confirm you still have variables from [step 3](#step-3-setup-variables)
 
-Test a real signed commit:
+- `KEYID`, which you can find in `$GNUPGHOME/keyinfo.txt` 
+- Certify Passphrase (`XXXX-XXXX-…`), which is in your password manager
 
-```bash
-cd ~/some-repo
-git commit --allow-empty -S -m "test: yubikey signed commit"
-git verify-commit HEAD
-git push
-```
+#### Follow Steps above
 
-Confirm the commit shows **Verified** (green) on GitHub. (Tap the YubiKey when it signs — the touch policy from 5e is waiting for your finger; the commit will appear to hang until you tap.)
+- [6A](#6a-enable-kdf-first) - Enable KDF first
+- [6B](#6b-change-pins-from-defaults) - Change PINs from defaults 
+- [6C](#6c-set-card-attributes-login-and-name) - Set login and name attributes
+- [6D](#6d-transfer-subkeys-to-the-yubikey) - Transfer subkeys to the YubiKey
+- [6E](#6e-require-touch-per-operation-recommended) - Require touch per operation (optional, but recommended)
+- [6F](#6f-disable-yubico-otp-optional) - Disable YubiCo OTP
+- [6G](#6g-verify-and-eject-yubikey) Verify and Eject YubiKey
 
-> **If it shows "Unverified" on GitHub** despite a valid local signature, the cause is almost always that `user.email` doesn't match both a UID on the key AND a verified email on your GitHub account. Check all three line up.
-
----
-
-## 9. Switching between the two YubiKeys
-
-GPG records a serial number per stub. When you physically swap to the other key, it may say `Please insert the card with serial number ...` because the stub still points at the previous key. Re-reading the inserted card rewrites the stub to its serial:
-
-```bash
-gpg-connect-agent "scd serialno" "learn --force" /bye
-```
-
-This is only needed **on each swap**, and only matters because the stub is serial-bound — the subkeys themselves are identical on both keys, so signatures from either verify against the same public key. With the nano living plugged in permanently and the 5C NFC only for travel/backup, swaps should be rare (a few times a year, not daily).
-
-### Set up the `yk-switch` alias (one-time)
-
-Add this to `~/.zshrc` so a swap is a single word instead of the full command:
-
-```bash
-alias yk-switch='gpg-connect-agent "scd serialno" "learn --force" /bye'
-```
-
-Reload the shell (`source ~/.zshrc` or open a new terminal). Then swapping is:
-
-1. Remove the current YubiKey
-2. Insert the other one
-3. Run `yk-switch`
-
-If `yk-switch` doesn't clear a stuck state, the heavier reset (restarts the agent — from drduh note #4) usually does:
-
-```bash
-pkill "gpg-agent|ssh-agent|pinentry"; gpg-connect-agent updatestartuptty /bye
-```
-
-> If you ever end up swapping *frequently* and the alias gets tiresome, the `remove-keygrips.sh` approach in the drduh guide deletes the serial-bound stub entirely so GPG accepts any card holding the right keys without prompting. More setup; only worth it for genuinely frequent swapping. Not needed for the nano-always-in pattern.
-
----
-
-## 10. Update the .netrc.gpg (if still using it)
-
-Re-encrypt the credentials file to the new key, and rotate the GitHub PAT to a fine-grained token while you're in there.
-
-```bash
-rm ~/.netrc.gpg
-vi ~/.netrc                  # edit: put the NEW fine-grained PAT in here
-gpg --encrypt --recipient "$KEYID" -o ~/.netrc.gpg ~/.netrc
-rm ~/.netrc                  # remove the plaintext — it holds the token in clear
-```
-
-> ⚠️ **Use a keyid that uniquely identifies the NEW key, not the email, during the parallel period.** If you have TWO keys with the same `foo@bar.com` UID — an old key and the new one — `--recipient foo@bar.com` is **ambiguous**: GPG may encrypt to either, and "it worked" doesn't tell you which. If it picks the **old** key, you won't be able to decrypt `.netrc.gpg` after you retire that key. Use the new key's primary keyid (`$KEYID`) — GPG auto-routes to its `[E]` encryption subkey, and the keyid uniquely picks the new key. Encryption uses the *public* key, so no YubiKey needs to be inserted for the encrypt step; the card is only needed later to *decrypt*.
-
-**Verify it encrypted to the NEW key:**
-
-```bash
-gpg --list-packets ~/.netrc.gpg | grep keyid
-```
-
-- keyid matches the new key's `[E]` subkey → correct. ✓
-- keyid matches the OLD key's `[E]` subkey → re-encrypt with the explicit new keyid above before retiring the old key.
-
-> Note: you encrypt *to* the primary keyid (`$KEYID`), but the packet records the `[E]` **subkey** id — because GPG routes encryption to the subkey. Both refer to the same (new) key; that's expected, not a mismatch.
-
-> **Once the old key is retired** (section below) the duplicate-UID ambiguity is gone, and `--recipient foo@bar.com` resolves uniquely to the new key again — so you can go back to the simpler email form for anything you re-encrypt after that.
-
----
-
-## Retiring an old YubiKey (do later, NOT today)
-
-Run this only after the new keys have been working in parallel for a week or two and you're confident. Commands provided now for reference. **Two-part cleanup** — remove the key material AND the ownertrust entry, or you'll create a dangling "ultimately trusted key not found" ghost (like the `F7F32…` one cleaned during setup).
-
-**1. Deregister the old key from services first (manual, before deleting anything):**
-   - GitHub → Settings → SSH and GPG keys → remove the old GPG key. Past commits stay Verified via GitHub's persistent record.
-   - Remove the old key as a registered security key / passkey anywhere it's used (GitHub, Google, Microsoft, etc.).
-   - Confirm `.netrc.gpg` and any other encrypted files are encrypted to the NEW key (see step 10 verify) — anything still encrypted to the old key must be re-encrypted first, or you lose access to it.
-
-**2. Investigate any unexpected subkeys before deleting:** List everything attached to the old key and confirm nothing is unaccounted for:
-   ```bash
-   gpg --list-keys --with-subkey-fingerprints <OLD_KEYID>
-   gpg --list-secret-keys --with-subkey-fingerprints <OLD_KEYID>
-   ```
-
-**3. Remove the old key material from the keyring:**
-   ```bash
-   # secret first (the stubs / any on-disk secret), then public
-   gpg --delete-secret-keys <OLD_KEYID>
-   gpg --delete-keys <OLD_KEYID>
-   ```
-
-**4. Remove the old key's ownertrust entry (the part people forget):**
-   ```bash
-   gpg --export-ownertrust > /tmp/ot.txt
-   # ownertrust uses the full fingerprint:
-   grep -v '<OLD_FULL_FINGERPRINT>' /tmp/ot.txt > /tmp/ot-clean.txt
-   rm ~/.gnupg/trustdb.gpg
-   gpg --import-ownertrust < /tmp/ot-clean.txt
-   gpg --check-trustdb        # should run clean, no "not found" note
-   rm /tmp/ot*.txt
-   ```
-   (Remember: `--import-ownertrust` MERGES, it doesn't replace — deleting `trustdb.gpg` and rebuilding from the cleaned file is what actually removes the entry.)
-
-**5. Physically retire the old YubiKey:** `ykman openpgp reset` wipes its OpenPGP applet. (Note: EUCLEAK affects this pre-5.7 key, so a reset doesn't fix that — but for disposal/repurposing it's clean.) Also reset/remove FIDO2 and PIV if you used them. Then store or dispose of the key.
-
----
-
-## 11. Cleanup + storage
-
-- [ ] Confirm the Certify passphrase, both keys' PINs, and KEYID are saved in 1Password.
-- [ ] Delete the loose `keyinfo.txt` helper from the stick root (KEYID is in 1Password now):
-      ```bash
-      rm /Volumes/GPG-Backup/keyinfo.txt
-      ```
-- [ ] **Remove the `certify-pass.txt` plaintext from the stick root** — keep the passphrase only in 1Password, so stick + passphrase stay two separate factors (the backed-up Certify key then still needs the passphrase to use, even if the stick is unlocked):
-      ```bash
-      rm /Volumes/GPG-Backup/certify-pass.txt
-      ```
-      (Alternative if you prefer convenience over the two-factor split: leave it — the stick is APFS-encrypted, so an unlocked stick could then do everything.)
-- [ ] The temp-dir working copy (`$GNUPGHOME` on internal disk, incl. its `certify-pass.txt`) is cleared on reboot. To zap it now: `rm -rf "$GNUPGHOME"`.
-- [ ] Reboot (clears any remaining `/var/folders/.../T/` working dir + live Certify key).
-- [ ] Eject the backup stick (`diskutil eject /Volumes/GPG-Backup`).
-- [ ] Store the stick SEPARATELY from the YubiKeys (different bag while traveling; offline cold storage when home — NOT the Synology, it's networked).
-- [ ] Ideally make a SECOND backup stick and store it in a different location.
-- [ ] 1Password sanity check — saved: Certify passphrase, both keys' User/Admin PINs, stick password, KEYID. Note "KDF enabled" so future-me knows the PINs are KDF-derived.
-
-> The backup directory (`gnupghome-backup/` minus the passphrase file) STAYS on the stick — that's your Certify-key backup for subkey renewal and provisioning more YubiKeys.
-
----
-
-## Later (independent of all the above)
-
-- **FIDO2 passkeys**: GitHub → Settings → Passkeys → add each YubiKey + Mac Touch ID as separate credentials. ~30s each. 5C NFC already has a FIDO2 PIN set; nano may prompt to set one.
-- **Retire any old YubiKey**: see the full "Retiring an old YubiKey" section above (after step 10) — deregister everywhere, investigate any unexpected subkeys, remove key material AND ownertrust entry, then `ykman openpgp reset` / dispose. (Pre-5.7 firmware is EUCLEAK-affected.)
-- **Subkey renewal** in ~2 years: mount the backup stick, restore from `/Volumes/GPG-Backup/gnupghome-backup` into a temp `$GNUPGHOME` (same as step 6), `--quick-set-expire` on the subkeys, re-export the public key, re-import it where you use it. Kill agents + eject the stick after (the agent-hygiene rule still applies). SSH keys don't need updating on remote hosts. See drduh "Updating keys".
-
----
-
-## Troubleshooting
-
-### `gpg --card-status` → "selecting card failed: Operation not supported by device"
-
-The card is plugged in but GPG can't talk to it. Almost always **daemon contention**, not a hardware or key problem (your keys on the card are unaffected). Most common cause in this workflow: a **stale `scdaemon` bound to a dead temp `$GNUPGHOME`** is squatting on the card's USB interface.
-
-Diagnose:
-
-```bash
-ps aux | grep -iE "scdaemon|ykman|yubico|pcsc" | grep -v grep
-```
-
-Look for a `scdaemon ... --homedir /var/folders/.../T/tmp.XXXX` line — that's a leftover from a provisioning session whose temp dir is gone. (Also quit Yubico Authenticator / any `ykman` process — they hold the card's CCID interface and block scdaemon.)
-
-Fix — kill ALL scdaemons (not just the current homedir's), then retry:
-
-```bash
-gpgconf --kill all 2>/dev/null; pkill gpg-agent; pkill scdaemon; sleep 1
-ps aux | grep -iE "scdaemon" | grep -v grep   # expect empty
-gpg --card-status                              # should now return card details
-```
-
-> Why `gpgconf --kill all` alone isn't enough: it only reaps daemons for the *current* `$GNUPGHOME`. A scdaemon spawned earlier against a temp dir survives bound to that dead homedir and keeps the card. `pkill scdaemon` clears them regardless of homedir.
-
-If that still fails after reseating the key (unplug, wait, replug, kill daemons, retry), it may be a driver-layer issue rather than contention. Then add the macOS workaround `disable-ccid` (makes scdaemon use PCSC instead of its internal CCID driver):
-
-```bash
-echo "disable-ccid" >> ~/.gnupg/scdaemon.conf
-gpgconf --kill all; sleep 1; gpg --card-status
-```
-
-This is one of the few config additions worth making even on a defaults-only setup — it's a functional fix, not cosmetic. Only add it if the daemon-kill alone doesn't work.
-
-### Swapping keys: "Please insert the card with serial number …"
-
-Expected when switching between the two YubiKeys — the stub is serial-bound. Run `yk-switch` (the alias from step 7) to re-read the inserted card. See step 9.
-
-### Commit signs locally but shows "Unverified" on GitHub
-
-`user.email` must match BOTH a UID on the key AND a verified email on your GitHub account. Check all three line up (see step 8).
-
-### `sec#` in `gpg -K` output
-
-Expected and correct — the `#` means the secret primary (Certify) key is NOT in this keyring (it's offline on your backup stick). `sec#` + `ssb>` = "Certify offline, subkeys on card", which is the intended end state.
+Now both keys carry identical subkeys. Setup Finished! 🎉
