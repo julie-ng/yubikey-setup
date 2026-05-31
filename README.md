@@ -1,22 +1,25 @@
-# YubiKey GPG Setup — Personal Setup
+# Personal YubiKey GPG Setup 
 
-After leaving Microsoft, I no longer need to [manage multiple identities](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys). Additionally, my existing keys are vulnerable to the [EUCLEAK](https://www.yubico.com/support/security-advisories/ysa-2024-03/). 
+After ~7 years, it was time to upgrade to new physical keys and newer encryption algorithms. My existing keys are vulnerable to the [EUCLEAK](https://www.yubico.com/support/security-advisories/ysa-2024-03/). And since I no longer work for Microsoft, I no longer need to [manage multiple identities](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys). 
 
-After ~7 years, it was time to upgrade to new physical keys and newer encryption algorithms.
+## Setup Features
 
-### How I use YubiKeys
+I mostly use YuibiKeys to sign my git commits and for authentication as a passkey as well as gpg encryption/decryption of `.netrc` so long lived tokens are not stored in plain text on my computer.
 
-- Signing git commits
-- Encrypted `.netrc` file for authentication to cloud services, e.g. GitHub.
-- Passkey for passwordless authentication.
+### Security Features
 
-## Dual Key Setup
+_Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adapted for my personal requirements._
 
-Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adapted for my personal requirements.
+- **Cryptography**: prefer modern Curve25519 algorithms over RSA
+- **Accounts not Hackable without Physical Access**: 
+  - All private keys stored offline (encrypted USB or YubiKey)
+  - YubiKey configured to require PIN and physical touch on  the gold contact to authorize operations
+  - Config Key Derived Function (KDF) to ensure PINs are hashed when crossing USB bus
+- Certify passphrase is stored in password manager, separate from USB stick (two factor)
 
-### Result
+### Two YubiKeys
 
-- **Primary Key**  
+- **Primary/Certify Key**  
   Stored separately offline on an APFS-encrypted USB drive. 
 
 - **Subkeys**  
@@ -32,27 +35,11 @@ Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but adap
 - **Password Manager**  
   For PINs and most importantly storing **certify passkey** separately from USB stick. Both are needed to use the offline primary key.
 
-## Cryptographic Algorithms — Curve25519, not RSA
-
-My [old setup (2018)](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys) used RSA cryptography, which has wider support but is older. 
-
-For this 2026 setup I chose the more modern Curve25519-family cryptography with EdDSA for certify/sign/auth and ECDH for encryption (EdDSA can't encrypt):
-
-| Key | Function | Algorithm | Curve |
-|-----|----------|-----------|-------|
-| `[C]` Primary Key | Certification | EdDSA | `ed25519` |
-| `[S]` Subkey | Signature | EdDSA | `ed25519` |
-| `[A]` Subkey | Authentication | EdDSA | `ed25519` |
-| `[E]` Subkey | Encryption | ECDH | `cv25519` |
-
-> [!IMPORTANT]
-> Before adopting this setup, check that every system you sign or authenticate to accepts Curve25519 keys — some older services still require RSA.
-
 ## Security Terminology & Abbreviations
 
 <details>
   <summary>
-    Below are some useful terms and brief definitions, useful for understanding guide. 
+    Expand to read useful terms and brief definitions, useful for understanding guide. 
   </summary>
 
 ### Abbreviations 
@@ -84,12 +71,12 @@ For this 2026 setup I chose the more modern Curve25519-family cryptography with 
 
 ---
 
-# Instructions
+# Setup Instructions
 
 Please note some personal preferences in this guide:
 
 - Prefer interactive `--edit-key` over scriptable `--pinentry-mode=loopback` to avoid secrets landing in `.zsh_history`, etc. 
-- _Not_ copying drdruh's configs because custom output formats. In a setup once and forget scenario, I prefer default formats, easier for debugging later.
+- I used drdruh's config during setup, but not saved for daily use. In a setup once and forget scenario, I prefer default formats, easier for debugging later.
 
 ### Pre-requisites checklist
 
@@ -101,56 +88,73 @@ Please note some personal preferences in this guide:
   brew install gnupg ykman pinentry-mac
   ```
 
-> [!IMPORTANT]
-> Need to enable Key Derived Function (KDF) one, **BEFORE** setting PINs or moving keys.
-
 ## Step 1. Setup Isolated working directory
 
 Use `mktemp` to generate in a throwaway `GNUPGHOME`, which will hold our private keys until transferred to YubiKey. This temp directory evaporates on reboot. 
 
-```bash
-export GNUPGHOME=$(mktemp -d)
-echo "$GNUPGHOME"
-cd "$GNUPGHOME"
-```
-
 > [!NOTE]
 > `GNUPGHOME` requires `export` in order for `gpg` to read it from the shell environment.
 
----
-
-## Step 2. Generate strong Certify passphrase
-
-First confirm you are in the temp directory, which should ouput something like this:
-
 ```bash
-$ pwd # print working directory
+export GNUPGHOME=$(mktemp -d)
+echo "$GNUPGHOME"
 /var/folders/tc/k2p_qwn37mvldzjps_8x49a6t0000gn/T/tmp.aB3kPzQ9rN # example output
 ```
 
-Then generate the passphrase directly to a `certify-pass.txt` file in `$GNUPGHOME`:
+Now switch to the temp directory
+
+```bash
+cd "$GNUPGHOME"
+```
+
+## Step 2. Generate strong Certify passphrase
+
+Once in the temp directory, generate the passphrase directly to a `certify-pass.txt` file in `$GNUPGHOME`:
 
 ```bash
 LC_ALL=C tr -dc "A-Z2-9" < /dev/urandom | tr -d "IOUS5" | \
     fold -w 4 | paste -sd - - | head -c 29 > "$GNUPGHOME/certify-pass.txt"
 ```
 
-## Step 3. Generate keys
+This passphrase is needed later for generating keys.
 
-Before running commands, set the passfile location and set a few variables for re-use.
+## Step 3. Setup Variables
 
-> [!IMPORTANT]
-> I set my subkey expiration to 2 years. Replace identity with your name and email.
+Before running commands, set the passfile location and set a few variables for re-use. **Replace fictional name and email below with your information.**
 
 ```bash
 PASSFILE="$GNUPGHOME/certify-pass.txt"
-IDENTITY="Your Name <foo@bar.com>"          
-EXPIRATION=2y
+IDENTITY="Anya Forger <anya.forger@spyxfamily.com>" # replace with your information
+EXPIRATION=2y                                       # 2 year expiry
 ```
 
-#### 3A. Generate Certify key 
+> [!TIP]
+> The email address used in signed commits will appear **publicly** on GitHub.com. I recommend using a professional email address over a personal email.
 
-(ed25519, no expiry)
+## Step 4. Generate keys on Mac
+
+> [!IMPORTANT]
+> Before adopting this setup, check that every system you sign or authenticate to accepts Curve25519 keys — some older services still require RSA.
+
+#### Choosing Curve25519 Cryptography over RSA
+
+My [old setup (2018)](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys) used RSA cryptography, which has wider support but is older. 
+
+For this 2026 setup I chose the more modern Curve25519-family cryptography with EdDSA for certify/sign/auth and ECDH for encryption (EdDSA can't encrypt):
+
+| Key | Function | Algorithm | Curve |
+|-----|----------|-----------|-------|
+| `[C]` Primary Key | Certification | EdDSA | `ed25519` |
+| `[S]` Subkey | Signature | EdDSA | `ed25519` |
+| `[A]` Subkey | Authentication | EdDSA | `ed25519` |
+| `[E]` Subkey | Encryption | ECDH | `cv25519` |
+
+#### 4A. Generate Certify key 
+
+The certify key has no expiry date and is used to re-generate subkeys after they expire in 2 years.
+
+> [!NOTE]
+> To set an expiry date, replace `never` with your expiry time period, e.g. `5y` for five years.
 
 Generate the certify `[C]` key:
 
@@ -159,15 +163,15 @@ gpg --batch --passphrase-file "$PASSFILE" \
     --quick-generate-key "$IDENTITY" ed25519 cert never
 ```
 
-Capture the key ID and fingerprint into a `keyinfo.txt` for later.
+Capture the key ID and fingerprint into a `keyinfo.txt` for configuration later.
 
 ```bash
 KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
 KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
-{ echo "KEYID=$KEYID"; echo "KEYFP=$KEYFP"; } > /Volumes/GPG-Backup/keyinfo.txt
+{ echo "KEYID=$KEYID"; echo "KEYFP=$KEYFP"; } > "$GNUPGHOME/keyinfo.txt"
 ```
 
-#### 3B. Generate SIGN subkey 
+#### 4B. Generate SIGN subkey 
 
 ```bash
 # Signing subkey
@@ -175,7 +179,7 @@ gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" ed25519 sign "$EXPIRATION"
 ```
 
-#### 3C. Generate AUTH subkey 
+#### 4C. Generate AUTH subkey 
 
 ```bash
 # Authentication subkey
@@ -183,7 +187,7 @@ gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" ed25519 auth "$EXPIRATION"
 ```
 
-#### 3D. Generate ENCRYPT subkey 
+#### 4D. Generate ENCRYPT subkey 
 
 ```bash
 # Encryption subkey — NOTE: cv25519, not ed25519
@@ -191,7 +195,7 @@ gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" cv25519 encrypt "$EXPIRATION"
 ```
 
-#### 3E. Verify keys were generated
+#### 4E. Verify keys were generated
 
 Verify `[C]`, `[S]`, `[A]`, `[E]` keys were generated. Run
 
@@ -208,51 +212,81 @@ ssb   ed25519/0x... [A] [expires: ...]
 ssb   cv25519/0x... [E] [expires: ...]
 ```
 
----
+### 4F. Export the public key
 
-## Step 4. Back up to USB Stick
-
-Without this backup, you can only provision ONE YubiKey. The backup is what lets the second key get the same subkeys.
-
-### 4a. Export the public key
+Export the public key so we can [upload it to GitHub for signature verification](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account).
 
 ```bash
 gpg --armor --export "$KEYID" > "$GNUPGHOME/$KEYID-pub.asc"
 ```
 
-### 4b. Copy the keyring to the stick (helpers as siblings)
+## Step 5. Back up Keyring to USB Stick
 
-Keep the backup a **faithful copy of a real `$GNUPGHOME`** — the `certify-pass.txt` helper and the exported public key go at the **stick root as siblings**, not inside the backup dir (you wouldn't normally find such files in a gnupghome, so don't pollute the backup with them):
+To provision a **second** YubiKey, we need to backup the existing `GNUPGHOME`, which has our private keys. After configuring the first YubiKey, the folder will only contain _stubs_ to the subkeys. 
 
-```bash
-# 1. Copy the working dir, then rename to a self-documenting name
-cp -av "$GNUPGHOME" /Volumes/GPG-Backup/
-mv /Volumes/GPG-Backup/"$(basename "$GNUPGHOME")" /Volumes/GPG-Backup/gnupghome-backup
+> [!IMPORTANT]
+> **USB Stick Name**: I named my USB drive `GPG-Backup` and thus it is mounted at `/Volumes/GPG-Backup/`. Adjust the path to match your setup.
 
-# 2. Move the non-keyring helpers OUT of the backup dir, up to the stick root
-mv /Volumes/GPG-Backup/gnupghome-backup/certify-pass.txt /Volumes/GPG-Backup/
-mv /Volumes/GPG-Backup/gnupghome-backup/"$KEYID-pub.asc"  /Volumes/GPG-Backup/
+### 5A. Move Certify Passphrase to Password Manager
+
+Read the passfile to get the passphrase (formatted like `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX`)
+
+```
+less $PASSFILE
 ```
 
-> Why: `gnupghome-backup/` should contain only what a real GnuPG home contains (`pubring.kbx`, `private-keys-v1.d/`, `trustdb.gpg`, etc.). The passphrase file and the public-key export are *your* helper artifacts, not part of the keyring — keeping them as siblings at the stick root keeps the backup clean and makes the restore in step 6 a pure `cp` of a real gnupghome. `gnupghome-backup` is lowercase to stay safe on case-sensitive volumes you might copy it to later. From here the guide refers to the backup as `/Volumes/GPG-Backup/gnupghome-backup` and the helpers as stick-root siblings.
+and **save the contents to a password manager**, e.g. 1Password. 
 
-**Resulting stick layout** (also your reference for restoring later):
+> [!CAUTION]
+> Double check your saved the passphrase **before** deleting the file. If you lose it, you can not renew your subkeys.
+
+Delete the passfile so we don't save the certify keys and required passphrase together.
+
+```bash
+rm $PASSFILE
+```
+
+### 5B. Copy the non-secret info to USB stick
+
+Copy the public key and info text file that contains our key ID and key fingerprint to the USB stick root:
+
+```bash
+mv "$GNUPGHOME/$KEYID-pub.asc"  /Volumes/GPG-Backup/
+mv "$GNUPGHOME/keyinfo.txt"  /Volumes/GPG-Backup/
+```
+
+### 5C. Copy the keyring to USB stick
+
+Now copy the keyring, i.e. `$GNUPGHOME` to the USB Stick.
+
+```bash
+cp -av "$GNUPGHOME" /Volumes/GPG-Backup/
+```
+
+Now, we'll rename the `tmp.xxxxx` folder to a human-friendly `gnupghome-backup` name.
+
+```bash
+mv /Volumes/GPG-Backup/"$(basename "$GNUPGHOME")" /Volumes/GPG-Backup/gnupghome-backup
+```
+
+### USB Directory Structure
+
+If done correctly, you should have something like this
 
 ```
 /Volumes/GPG-Backup/
-├── gnupghome-backup/        <- PURE keyring; restore source (step 6 / renewal)
+├── gnupghome-backup/        
 │   ├── pubring.kbx
-│   ├── private-keys-v1.d/   <- the Certify key + subkeys live here
+│   ├── private-keys-v1.d/   # contains certify key + subkeys
 │   ├── trustdb.gpg
 │   └── ...
-├── certify-pass.txt         <- Certify passphrase (helper) — DELETE in cleanup (step 11)
-├── keyinfo.txt              <- KEYID / KEYFP (not secret) — needed to restore in step 6
-└── <KEYID>-pub.asc          <- exported public key (helper)
+├── keyinfo.txt              # KEYID / KEYFP (not secret)
+└── <KEYID>-pub.asc          # exported public key
 ```
 
-> **To restore later** (provision another YubiKey, or renew subkeys in ~2 years): `cp -av /Volumes/GPG-Backup/gnupghome-backup/* "$GNUPGHOME"/` into a fresh temp `$GNUPGHOME`. Because the backup dir holds only keyring files, that yields a clean working gnupghome with nothing foreign in it.
+If you see a file named `pubring.kbx~` that ends with a tilde `~`, that is a stale copy and safe to delete from the USB stick.
 
-### 4c. Verify the backup before trusting it
+### 5D. Verify the backup before trusting it
 
 Confirm the SECRET keys are readable from the renamed stick copy:
 
@@ -260,24 +294,42 @@ Confirm the SECRET keys are readable from the renamed stick copy:
 GNUPGHOME=/Volumes/GPG-Backup/gnupghome-backup gpg -K
 ```
 
-You want `sec` plus three `ssb` lines (S, A, E) with **no `>` markers** (a `>` means "moved to card / stub"). No `>` = full secret keys = backup is good. **Do not proceed until this works.**
+which should output something like this
 
-> Also save the `$KEYID-pub.asc` somewhere easy to reach later (1Password attachment, or push to GitHub in step 7). Without the public key you can't sign/encrypt, though SSH auth would still work.
+```
+/Volumes/GPG-Backup/gnupghome-backup/pubring.kbx
+------------------------------------------------
+sec   ed25519 2026-05-31 [C]
+      A1B2C3D4E5F60718293A4B5C6D7E8F9012345678
+uid           [ultimate] Your Name <foo@bar.com>
+ssb   ed25519 2026-05-31 [S] [expires: 2028-05-31]
+ssb   ed25519 2026-05-31 [A] [expires: 2028-05-31]
+ssb   cv25519 2026-05-31 [E] [expires: 2028-05-31]
+```
 
-### 4d. Eject the stick
+> [!IMPORTANT]
+> Check that `sec` and `ssb` lines have no `>` or `#` markers. If you follow the guide exactly and working with freshly generated keys, you should be fine.
 
-The stick has now served its purpose for provisioning — everything in step 5 operates on the YubiKey, not the stick. Eject it here (the earliest safe point), so it's physically absent and the backup can't be harmed by anything in step 5.
+Sidenote: I added this sanity check mostly because I've screwed this up in the past. And while generating and refining this guide with an AI assistant, there were issues in step orders that would have killed the backup – which I caught when reviewing before running the commands. This version ejects the USB stick before any destructive commands are run.
+
+### 5E. Eject the stick
+
+Before we can eject the USB stick, we need to kill a `gpg-agent` that was spawned in previous step (5D) when we verified the backup.
+
+Kill the process and confirm nothing is using the stick
 
 ```bash
 gpgconf --kill all 2>/dev/null; pkill gpg-agent; sleep 1
-lsof | grep -i gpg-backup        # MUST be empty before ejecting
-diskutil eject /Volumes/GPG-Backup
-echo "$GNUPGHOME"                # confirm still the INTERNAL temp dir, not the stick
+lsof | grep -i gpg-backup 
 ```
 
-> ⚠️ **Why the agent kill is part of ejecting.** The 4c verify ran `gpg` with `GNUPGHOME=/Volumes/GPG-Backup/...`, which spawns a `gpg-agent` that stays attached to the STICK (open sockets at `<stick>/S.gpg-agent*`). That blocks the eject ("disk in use") AND, if a later `keytocard` got entangled with that stick-pinned agent, could modify the keyring **on the stick** — destroying the backup. Killing agents first releases the stick and removes that hazard. Always: any `gpg` run against the stick path → kill agents before ejecting.
->
-> After this, work only from the temp-dir `$GNUPGHOME` (confirm with the `echo`). The card operations in step 5 don't need the stick at all.
+If `lsof` returns no results, we can eject the stick via Mac OS Finder **or** by running
+
+```bash
+diskutil eject /Volumes/GPG-Backup
+```
+
+and pull it out of the computer for good measure.
 
 ---
 
