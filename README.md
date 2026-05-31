@@ -136,11 +136,11 @@ EXPIRATION=2y                                       # 2 year expiry
 > [!IMPORTANT]
 > Before adopting this setup, check that every system you sign or authenticate to accepts Curve25519 keys — some older services still require RSA.
 
-#### Choosing Curve25519 Cryptography over RSA
+### Curve25519 Cryptography
 
-My [old setup (2018)](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys) used RSA cryptography, which has wider support but is older. 
+My [old setup (2018)](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys) used [RSA cryptography](https://en.wikipedia.org/wiki/RSA_cryptosystem), which has wider support but is older. 
 
-For this 2026 setup I chose the more modern Curve25519-family cryptography with EdDSA for certify/sign/auth and ECDH for encryption (EdDSA can't encrypt):
+For this 2026 setup I chose the faster and more modern [Curve25519-family cryptography](https://en.wikipedia.org/wiki/Curve25519) with EdDSA for certify/sign/auth and ECDH for encryption (EdDSA can't encrypt):
 
 | Key | Function | Algorithm | Curve |
 |-----|----------|-----------|-------|
@@ -149,7 +149,7 @@ For this 2026 setup I chose the more modern Curve25519-family cryptography with 
 | `[A]` Subkey | Authentication | EdDSA | `ed25519` |
 | `[E]` Subkey | Encryption | ECDH | `cv25519` |
 
-#### 4A. Generate Certify key 
+### 4A. Generate Certify key 
 
 The certify key has no expiry date and is used to re-generate subkeys after they expire in 2 years.
 
@@ -171,7 +171,7 @@ KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }'
 { echo "KEYID=$KEYID"; echo "KEYFP=$KEYFP"; } > "$GNUPGHOME/keyinfo.txt"
 ```
 
-#### 4B. Generate SIGN subkey 
+### 4B. Generate SIGN subkey 
 
 ```bash
 # Signing subkey
@@ -179,7 +179,7 @@ gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" ed25519 sign "$EXPIRATION"
 ```
 
-#### 4C. Generate AUTH subkey 
+### 4C. Generate AUTH subkey 
 
 ```bash
 # Authentication subkey
@@ -187,7 +187,7 @@ gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" ed25519 auth "$EXPIRATION"
 ```
 
-#### 4D. Generate ENCRYPT subkey 
+### 4D. Generate ENCRYPT subkey 
 
 ```bash
 # Encryption subkey — NOTE: cv25519, not ed25519
@@ -195,7 +195,7 @@ gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" cv25519 encrypt "$EXPIRATION"
 ```
 
-#### 4E. Verify keys were generated
+### 4E. Verify keys were generated
 
 Verify `[C]`, `[S]`, `[A]`, `[E]` keys were generated. Run
 
@@ -307,7 +307,7 @@ ssb   cv25519... [E] [expires: ...]
 ```
 
 > [!IMPORTANT]
-> Check that `sec` and `ssb` lines have **no** greater-than `>` or hash `#` markers. If you follow the guide exactly and working with freshly generated keys, you should be fine.
+> Check that `sec` and `ssb` lines have **no** greater-than `>` or hash `#` markers, i.e. no `sec#` or `ssb>`. If you follow the guide exactly and working with freshly generated keys, you should be fine.
 
 Again, this is sanity check confirmation that the copy worked properly before continuing.
 
