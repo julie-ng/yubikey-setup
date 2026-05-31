@@ -88,7 +88,9 @@ Please note some personal preferences in this guide:
   brew install gnupg ykman pinentry-mac
   ```
 
-## Step 1. Setup Isolated working directory
+## Phase 1 - Setup, Generate Keys
+
+### Step 1. Setup Isolated working directory
 
 Use `mktemp` to generate in a throwaway `GNUPGHOME`, which will hold our private keys until transferred to YubiKey. This temp directory evaporates on reboot. 
 
@@ -107,7 +109,7 @@ Now switch to the temp directory
 cd "$GNUPGHOME"
 ```
 
-## Step 2. Generate strong Certify passphrase
+### Step 2. Generate strong Certify passphrase
 
 Once in the temp directory, generate the passphrase directly to a `certify-pass.txt` file in `$GNUPGHOME`:
 
@@ -118,7 +120,7 @@ LC_ALL=C tr -dc "A-Z2-9" < /dev/urandom | tr -d "IOUS5" | \
 
 This passphrase is needed later for generating keys.
 
-## Step 3. Setup Variables
+### Step 3. Setup Variables
 
 Before running commands, set the passfile location and set a few variables for re-use. **Replace fictional name and email below with your information.**
 
@@ -131,12 +133,12 @@ EXPIRATION=2y                                       # 2 year expiry
 > [!TIP]
 > The email address used in signed commits will appear **publicly** on GitHub.com. I recommend using a professional email address over a personal email.
 
-## Step 4. Generate keys on Mac
+### Step 4. Generate keys on Mac
 
 > [!IMPORTANT]
 > Before adopting this setup, check that every system you sign or authenticate to accepts Curve25519 keys — some older services still require RSA.
 
-### Curve25519 Cryptography
+#### Curve25519 Cryptography
 
 My [old setup (2018)](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys) used [RSA cryptography](https://en.wikipedia.org/wiki/RSA_cryptosystem), which has wider support but is older. 
 
@@ -149,7 +151,7 @@ For this 2026 setup I chose the faster and more modern [Curve25519-family crypto
 | `[A]` Subkey | Authentication | EdDSA | `ed25519` |
 | `[E]` Subkey | Encryption | ECDH | `cv25519` |
 
-### 4A. Generate Certify key 
+#### 4A. Generate Certify key 
 
 The certify key has no expiry date and is used to re-generate subkeys after they expire in 2 years.
 
@@ -171,7 +173,7 @@ KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }'
 { echo "KEYID=$KEYID"; echo "KEYFP=$KEYFP"; } > "$GNUPGHOME/keyinfo.txt"
 ```
 
-### 4B. Generate SIGN subkey 
+#### 4B. Generate SIGN subkey 
 
 ```bash
 # Signing subkey
@@ -179,7 +181,7 @@ gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" ed25519 sign "$EXPIRATION"
 ```
 
-### 4C. Generate AUTH subkey 
+#### 4C. Generate AUTH subkey 
 
 ```bash
 # Authentication subkey
@@ -187,7 +189,7 @@ gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" ed25519 auth "$EXPIRATION"
 ```
 
-### 4D. Generate ENCRYPT subkey 
+#### 4D. Generate ENCRYPT subkey 
 
 ```bash
 # Encryption subkey — NOTE: cv25519, not ed25519
@@ -195,7 +197,7 @@ gpg --batch --pinentry-mode=loopback --passphrase-file "$PASSFILE" \
     --quick-add-key "$KEYFP" cv25519 encrypt "$EXPIRATION"
 ```
 
-### 4E. Verify keys were generated
+#### 4E. Verify keys were generated
 
 Verify `[C]`, `[S]`, `[A]`, `[E]` keys were generated. Run
 
@@ -212,7 +214,7 @@ ssb   ed25519/0x... [A] [expires: ...]
 ssb   cv25519/0x... [E] [expires: ...]
 ```
 
-### 4F. Export the public key
+#### 4F. Export the public key
 
 Export the public key so we can [upload it to GitHub for signature verification](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account).
 
@@ -220,14 +222,14 @@ Export the public key so we can [upload it to GitHub for signature verification]
 gpg --armor --export "$KEYID" > "$GNUPGHOME/$KEYID-pub.asc"
 ```
 
-## Step 5. Back up Keyring to USB Stick
+### Step 5. Back up Keyring to USB Stick
 
 To provision a **second** YubiKey, we need to backup the existing `GNUPGHOME`, which has our private keys. After configuring the first YubiKey, the folder will only contain _stubs_ to the subkeys. 
 
 > [!IMPORTANT]
 > **USB Stick Name**: I named my USB drive `GPG-Backup` and thus it is mounted at `/Volumes/GPG-Backup/`. Adjust the path to match your setup.
 
-### 5A. Move Certify Passphrase to Password Manager
+#### 5A. Move Certify Passphrase to Password Manager
 
 Read the passfile to get the passphrase (formatted like `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX`)
 
@@ -246,7 +248,7 @@ Delete the passfile so we don't save the certify keys and required passphrase to
 rm $PASSFILE
 ```
 
-### 5B. Copy the non-secret info to USB stick
+#### 5B. Copy the non-secret info to USB stick
 
 Copy the public key and info text file that contains our key ID and key fingerprint to the USB stick root:
 
@@ -255,7 +257,7 @@ mv "$GNUPGHOME/$KEYID-pub.asc"  /Volumes/GPG-Backup/
 mv "$GNUPGHOME/keyinfo.txt"  /Volumes/GPG-Backup/
 ```
 
-### 5C. Copy the keyring to USB stick
+#### 5C. Copy the keyring to USB stick
 
 Now copy the keyring, i.e. `$GNUPGHOME` to the USB Stick.
 
@@ -269,7 +271,7 @@ Now, we'll rename the `tmp.xxxxx` folder to a human-friendly `gnupghome-backup` 
 mv /Volumes/GPG-Backup/"$(basename "$GNUPGHOME")" /Volumes/GPG-Backup/gnupghome-backup
 ```
 
-### USB Directory Structure
+#### USB Directory Structure
 
 If done correctly, you should have something like this
 
@@ -286,7 +288,7 @@ If done correctly, you should have something like this
 
 If you see a file named `pubring.kbx~` that ends with a tilde `~`, that is a stale copy and safe to delete from the USB stick.
 
-### 5D. Verify the backup before trusting it
+#### 5D. Verify the backup before trusting it
 
 This is a paranoid step to confirm the SECRET keys are readable from the renamed stick copy:
 
@@ -311,7 +313,7 @@ ssb   cv25519... [E] [expires: ...]
 
 Again, this is sanity check confirmation that the copy worked properly before continuing.
 
-### 5E. Eject the stick
+#### 5E. Eject the stick
 
 Before we can eject the USB stick, we need to kill a `gpg-agent` that was spawned in previous step (5D) when we verified the backup:
 
@@ -333,7 +335,9 @@ Pull the stick out of the computer for good measure. We'll plug it back in later
 
 ---
 
-## 5. Configure + load YubiKey #1 (nano)
+## Phase 2 - Configure Yubikey #1 
+
+### Step 6. Configure + load YubiKey #1 (nano)
 
 Plug in the nano. Confirm it's seen:
 
@@ -341,7 +345,7 @@ Plug in the nano. Confirm it's seen:
 gpg --card-status
 ```
 
-### 5a. Enable KDF FIRST (before PINs, before keys)
+#### 6A. Enable KDF FIRST (before PINs, before keys)
 
 ```bash
 gpg --command-fd=0 --pinentry-mode=loopback --card-edit <<EOF
@@ -355,7 +359,7 @@ EOF
 >
 > Note the `12345678` in the heredoc is the *default* Admin PIN — this only works because KDF runs BEFORE 5b changes the PIN. Order matters: KDF (5a) → change PINs (5b) → login + keytocard (5c/5d). If you ever reorder, this hardcoded default breaks.
 
-### 5b. Change PINs off defaults
+#### 6B. Change PINs off defaults
 
 Pick values and save them in 1Password. User PIN ≥ 6 digits, Admin PIN ≥ 8.
 
@@ -373,7 +377,7 @@ gpg --card-edit
 
 > Save in 1Password: "YubiKey nano — OpenPGP User PIN / Admin PIN".
 
-### 5c. Set card attributes: login (required) + holder name (optional)
+#### 6C. Set card attributes: login (required) + holder name (optional)
 
 Do this **interactively** — these are admin-authorized writes, so the card needs the **Admin PIN**. A heredoc with `--pinentry-mode=loopback` supplies no PIN and fails with `error setting login data: Bad PIN`. Interactive prompts for the Admin PIN properly (via pinentry) and keeps the PIN off the command line. Both attributes are set in the same session:
 
@@ -401,7 +405,7 @@ You'll be prompted for the **Admin PIN** to authorize the writes (cached after t
 
 > If you see `Bad PIN`, you're either entering the wrong Admin PIN or (if scripted) supplying none. Check `ykman openpgp info` → `Admin PIN tries remaining` — it starts at 3, and hitting 0 locks the Admin PIN (recoverable only via `ykman openpgp reset`, which wipes the applet). Don't brute-force it; stop and verify the PIN first.
 
-### 5d. Transfer subkeys to the card (keytocard)
+#### 6D. Transfer subkeys to the card (keytocard)
 
 The stick is already ejected (step 4d), so `keytocard` physically cannot harm the backup — an unmounted volume can't be modified. `keytocard` is **destructive** to the on-disk keys (each subkey becomes a stub pointing at the card), which is fine because the backup is safe on the ejected stick.
 
@@ -465,7 +469,7 @@ Verify the subkeys now show `ssb>` (the `>` = on smartcard):
 gpg -K
 ```
 
-### 5e. (Recommended) require touch per operation
+#### 6E. (Recommended) require touch per operation
 
 By default the OpenPGP applet signs/decrypts/authenticates using just the cached PIN — **no touch needed**. (This is separate from FIDO2's always-on passkey touch; different applet.) That means with the nano permanently plugged in and the PIN cached, any process running as you could ask the card to sign/decrypt silently. A touch policy breaks that: the card won't perform the operation until a human physically taps it — malware can't fake a finger. Worth enabling *because* the nano lives plugged in.
 
@@ -498,7 +502,7 @@ Reasoning:
 
 > Per-key, not per-subkey: you set this again on the 5C NFC in step 6, and can choose differently (e.g. stricter `on` for `sig` on the travel key since it leaves the house). The subkeys are identical either way — only the touch gate differs.
 
-### 5f. (Optional) disable Yubico OTP
+#### 6F. (Optional) disable Yubico OTP
 
 The YubiKey's **Yubico OTP** applet types a one-time password (a long `cccccc…`-prefixed string) whenever its contact is touched while a text field has focus. On an always-plugged-in nano this fires by accident now and then — bumping the key dumps an OTP into whatever field has focus (a chat box, a terminal, a commit message). It's harmless (a single OTP is useless out of context and single-use) but annoying.
 
@@ -513,7 +517,7 @@ ykman config usb --disable OTP
 > - Does NOT affect OpenPGP, FIDO2, PIV, or OATH — only the OTP applet.
 > - Accidental touches will then do nothing instead of emitting an OTP.
 
-### 5g. Finish with the nano (verify, eject, clean up agents)
+#### 6G. Finish with the nano (verify, eject, clean up agents)
 
 The nano is fully provisioned. Before moving to the 5C NFC, confirm the result and clear agent state so step 6 starts clean.
 
