@@ -288,7 +288,7 @@ If you see a file named `pubring.kbx~` that ends with a tilde `~`, that is a sta
 
 ### 5D. Verify the backup before trusting it
 
-Confirm the SECRET keys are readable from the renamed stick copy:
+This is a paranoid step to confirm the SECRET keys are readable from the renamed stick copy:
 
 ```bash
 GNUPGHOME=/Volumes/GPG-Backup/gnupghome-backup gpg -K
@@ -310,13 +310,11 @@ ssb   cv25519 2026-05-31 [E] [expires: 2028-05-31]
 > [!IMPORTANT]
 > Check that `sec` and `ssb` lines have no `>` or `#` markers. If you follow the guide exactly and working with freshly generated keys, you should be fine.
 
-Sidenote: I added this sanity check mostly because I've screwed this up in the past. And while generating and refining this guide with an AI assistant, there were issues in step orders that would have killed the backup – which I caught when reviewing before running the commands. This version ejects the USB stick before any destructive commands are run.
+Again, this is sanity check confirmation that the copy worked properly before continuing.
 
 ### 5E. Eject the stick
 
-Before we can eject the USB stick, we need to kill a `gpg-agent` that was spawned in previous step (5D) when we verified the backup.
-
-Kill the process and confirm nothing is using the stick
+Before we can eject the USB stick, we need to kill a `gpg-agent` that was spawned in previous step (5D) when we verified the backup:
 
 ```bash
 gpgconf --kill all 2>/dev/null; pkill gpg-agent; sleep 1
@@ -329,7 +327,10 @@ If `lsof` returns no results, we can eject the stick via Mac OS Finder **or** by
 diskutil eject /Volumes/GPG-Backup
 ```
 
-and pull it out of the computer for good measure.
+Pull the stick out of the computer for good measure. We'll plug it back in later when configuring the second key.
+
+> [!NOTE]
+> **Defense in depth** – past mistakes and errors in AI-generated drafts of this guide put destructive `keytocard` steps *before* ejecting the stick — one wrong `GNUPGHOME` and the backup goes with it. A physically unmounted stick is protected from destructive commands.
 
 ---
 
