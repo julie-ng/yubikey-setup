@@ -299,16 +299,15 @@ which should output something like this
 ```
 /Volumes/GPG-Backup/gnupghome-backup/pubring.kbx
 ------------------------------------------------
-sec   ed25519 2026-05-31 [C]
-      A1B2C3D4E5F60718293A4B5C6D7E8F9012345678
-uid           [ultimate] Your Name <foo@bar.com>
-ssb   ed25519 2026-05-31 [S] [expires: 2028-05-31]
-ssb   ed25519 2026-05-31 [A] [expires: 2028-05-31]
-ssb   cv25519 2026-05-31 [E] [expires: 2028-05-31]
+sec   ed25519... [C]
+uid   ...
+ssb   ed25519... [S] [expires: ...]
+ssb   ed25519... [A] [expires: ...]
+ssb   cv25519... [E] [expires: ...]
 ```
 
 > [!IMPORTANT]
-> Check that `sec` and `ssb` lines have no `>` or `#` markers. If you follow the guide exactly and working with freshly generated keys, you should be fine.
+> Check that `sec` and `ssb` lines have **no** greater-than `>` or hash `#` markers. If you follow the guide exactly and working with freshly generated keys, you should be fine.
 
 Again, this is sanity check confirmation that the copy worked properly before continuing.
 
