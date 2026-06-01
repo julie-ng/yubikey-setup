@@ -2,6 +2,8 @@
 
 After ~7 years, it was time to upgrade to new physical keys and newer encryption algorithms. My existing keys are vulnerable to the [EUCLEAK](https://www.yubico.com/support/security-advisories/ysa-2024-03/). And since I no longer work for Microsoft, I no longer need to [manage multiple identities](https://julie.io/blog/setup-git-multiple-gpg-and-yubikeys). 
 
+![YubiKey Setup Diagram - Distribution of Keys](./yubikey-setup-diagram.svg)
+
 ## Setup Features
 
 I mostly use YubiKeys to sign my git commits and for authentication as a passkey as well as gpg encryption/decryption of `.netrc` so long lived tokens are not stored in plain text on my computer.

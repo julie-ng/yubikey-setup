@@ -1,0 +1,78 @@
+<svg width="100%" viewBox="0 0 680 400" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>YubiKey setup: device relationships</title>
+<desc>USB stick holds the offline Certify key (dotted connection, brought out only for renewals). YubiKey 5C Nano stays plugged into the Mac (solid line). YubiKey 5C NFC is the backup, used when traveling (dotted line). The Nano and 5C NFC each carry identical [S] [A] [E] subkeys.</desc>
+
+<style>
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  .th { font-size: 14px; font-weight: 500; }
+  .ts { font-size: 12px; font-weight: 400; }
+  .stick-fill   { fill: #F1EFE8; }
+  .stick-stroke { stroke: #5F5E5A; }
+  .stick-title  { fill: #2C2C2A; }
+  .stick-sub    { fill: #444441; }
+  .mac-fill   { fill: #E6F1FB; }
+  .mac-stroke { stroke: #185FA5; }
+  .mac-title  { fill: #042C53; }
+  .mac-sub    { fill: #0C447C; }
+  .nano-fill   { fill: #E1F5EE; }
+  .nano-stroke { stroke: #0F6E56; }
+  .nano-title  { fill: #04342C; }
+  .nano-sub    { fill: #085041; }
+  .nfc-fill   { fill: #EEEDFE; }
+  .nfc-stroke { stroke: #534AB7; }
+  .nfc-title  { fill: #26215C; }
+  .nfc-sub    { fill: #3C3489; }
+  .label      { fill: #444441; }
+  .label-bg   { fill: #FFFFFF; }
+  .conn       { stroke: #888780; fill: none; }
+  @media (prefers-color-scheme: dark) {
+    .stick-fill   { fill: #444441; }
+    .stick-stroke { stroke: #B4B2A9; }
+    .stick-title  { fill: #F1EFE8; }
+    .stick-sub    { fill: #D3D1C7; }
+    .mac-fill   { fill: #0C447C; }
+    .mac-stroke { stroke: #85B7EB; }
+    .mac-title  { fill: #E6F1FB; }
+    .mac-sub    { fill: #B5D4F4; }
+    .nano-fill   { fill: #085041; }
+    .nano-stroke { stroke: #5DCAA5; }
+    .nano-title  { fill: #E1F5EE; }
+    .nano-sub    { fill: #9FE1CB; }
+    .nfc-fill   { fill: #3C3489; }
+    .nfc-stroke { stroke: #AFA9EC; }
+    .nfc-title  { fill: #EEEDFE; }
+    .nfc-sub    { fill: #CECBF6; }
+    .label      { fill: #D3D1C7; }
+    .label-bg   { fill: #1A1A1A; }
+    .conn       { stroke: #888780; }
+  }
+</style>
+
+<rect x="220" y="40" width="240" height="62" rx="10" stroke-width="0.5" class="stick-fill stick-stroke"/>
+<text class="th stick-title" x="340" y="64" text-anchor="middle" dominant-baseline="central">USB stick (offline, encrypted)</text>
+<text class="ts stick-sub" x="340" y="84" text-anchor="middle" dominant-baseline="central">Primary [C] certify key</text>
+
+<line x1="340" y1="102" x2="340" y2="170" stroke-width="1" stroke-dasharray="4 4" class="conn"/>
+<rect x="296" y="125" width="88" height="20" rx="4" class="label-bg"/>
+<text class="ts label" x="340" y="135" text-anchor="middle" dominant-baseline="central">offline (renewals)</text>
+
+<rect x="240" y="170" width="200" height="62" rx="10" stroke-width="0.5" class="mac-fill mac-stroke"/>
+<text class="th mac-title" x="340" y="194" text-anchor="middle" dominant-baseline="central">Mac (daily driver)</text>
+<text class="ts mac-sub" x="340" y="214" text-anchor="middle" dominant-baseline="central">FileVault enabled</text>
+
+<polyline points="240,201 170,201 170,300" stroke-width="1.5" class="conn"/>
+<rect x="120" y="240" width="100" height="20" rx="4" class="label-bg"/>
+<text class="ts label" x="170" y="250" text-anchor="middle" dominant-baseline="central">always plugged in</text>
+
+<polyline points="440,201 510,201 510,300" stroke-width="1" stroke-dasharray="4 4" class="conn"/>
+<rect x="460" y="240" width="100" height="20" rx="4" class="label-bg"/>
+<text class="ts label" x="510" y="250" text-anchor="middle" dominant-baseline="central">backup / travel</text>
+
+<rect x="60" y="300" width="220" height="62" rx="10" stroke-width="0.5" class="nano-fill nano-stroke"/>
+<text class="th nano-title" x="170" y="324" text-anchor="middle" dominant-baseline="central">YubiKey 5C Nano</text>
+<text class="ts nano-sub" x="170" y="344" text-anchor="middle" dominant-baseline="central">[S] [A] [E] subkeys</text>
+
+<rect x="400" y="300" width="220" height="62" rx="10" stroke-width="0.5" class="nfc-fill nfc-stroke"/>
+<text class="th nfc-title" x="510" y="324" text-anchor="middle" dominant-baseline="central">YubiKey 5C NFC</text>
+<text class="ts nfc-sub" x="510" y="344" text-anchor="middle" dominant-baseline="central">[S] [A] [E] subkeys</text>
+</svg>
