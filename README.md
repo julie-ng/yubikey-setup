@@ -248,13 +248,9 @@ less $PASSFILE
 and **save the contents to a password manager**, e.g. 1Password. 
 
 > [!CAUTION]
-> Double check you saved the passphrase **before** deleting the file. If you lose it, you can not renew your subkeys.
+> Double check you saved the passphrase **before** deleting the file - or restarting computer. If you lose it, you can not renew your subkeys.
 
-Delete the passfile so we don't save the certify keys and required passphrase together.
-
-```bash
-rm $PASSFILE
-```
+The file (and everything in the temp `$GNUPGHOME` directory) will be automatically deleted when you restart your computer.
 
 #### 5B. Copy the non-secret info to USB stick
 
@@ -459,7 +455,8 @@ Before we continue, note that each `keytocard` operation, you will need **two (2
 - **Certify passphrase** - look up in your password manager
 - **Admin PIN** - set in step 6B above
 
-GPG might cache the passphrase. But when I moved my keys, I had to type the long `XXXX-XXXX` each time.
+> [!TIP]
+> GPG _usually_ caches the passphrase after the first unlock; you may be re-prompted for the Admin PIN per operation.
 
 Now, we'll make the changes _interactively_.
 
@@ -723,7 +720,7 @@ gpg --card-status
 
 which will automatically create the stubs, i.e. running `gpg -K` will show three `ssb>` with the `>` marker.
 
-#### 9C. Configure pinentry
+#### 9C. Configure Shell Environment
 
 Finally set `GPG_TTY` so pinentry can prompt in the right terminal, by saving this line to `.zshrc` or your preferred config.
 
@@ -753,30 +750,63 @@ Follow the official GitHub docs on [Adding a GPG key to your GitHub account](htt
 
 Otherwise you will see "unverified" for your commits.
 
-Write and push a test commit to see the results:
+After updating the git global config in step 10A, write and push a test commit to see the results:
 
 ```bash
 git commit --allow-empty -m "testing git commit signature"
 git push
 ```
 
-### Step 11 - Reencrypt `.netrc`
+### Step 11 - Create and encrypt `.netrc` config file
 
-First decrypt the `.netrc.gpg` file with old key. Or create a new `.netrc` file from scratch with new personal access tokens (PAT).
+#### Create `~/.netrc` file
 
-Then encrypt it with your new keys, using `$KEYID` - not email (which is identical to old key).
+First create a `.netrc` file in your home directory, i.e. `~`. Here is an example `~/.netrc` with GitHub credentials:
+
+```
+machine github.com
+  login <USERNAME>
+  password <PAT>
+```
+
+> [!TIP]
+> `.netrc` is also used for git, curl, wget, ftp and other services, e.g. Heroku. 
+
+Now we have credentials in plain text. 
+
+#### Encrypt to create `.netrc.gpg`
+
+Next, encrypt it with your new keys using `$KEYID`.
 
 ```bash
+# Default
+gpg --encrypt --recipient email@domain.com -o ~/.netrc.gpg ~/.netrc
+
+# Use KEYID if you have multiple keys with same identity.
 gpg --encrypt --recipient "$KEYID" -o ~/.netrc.gpg ~/.netrc
 ```
 
-Now remove the plain text file
+> [!TIP]
+> You can also use the email you set your identity, e.g. `--recipient email@domain.com`. I used key ID above because as I am rotating physical keys, I temporarily have multiple keys with the same email.
+
+Note the new file has a `.gpg` extension. Now remove the plain text file:
 
 ```bash
 rm ~/.netrc
 ```
 
 If configured properly, when doing `git push` to GitHub, you'll be prompted for your PIN and to touch the YubiKey's gold contact.
+
+#### Decrypting `.netrc.gpg` for edit
+
+If you need to rotate or add PATs, you can decrypt the file like this:
+
+```bash
+gpg --decrypt --recipient email@domain.com -o ~/.netrc ~/.netrc.gpg
+```
+
+Then edit `.netrc`, save and re-encrypt.
+
 
 ---
 
@@ -800,3 +830,4 @@ If this happens often, consider creating an alias, e.g. `yk-switch`.
 
 - [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide) - definitive community guide for using YubiKeys with GnuPG and SSH.
 - GitHub Docs: [Adding a GPG key to your GitHub account](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account).
+- Yubico: [Security Advisory YSA-2024-03 Infineon ECDSA Private Key Recovery](https://www.yubico.com/support/security-advisories/ysa-2024-03/).
