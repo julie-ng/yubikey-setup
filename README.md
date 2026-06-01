@@ -685,7 +685,16 @@ Confirm you still have variables from [step 3](#step-3-setup-variables)
 
 Now both keys carry identical subkeys. 
 
-Setup Finished! 🎉
+#### Remove temporary `GNUPGHOME`
+
+> [!IMPORTANT]
+> Ensure the temporary `GNUPGHOME` folder, which contains your `certify-pass.txt` is deleted. 
+
+Now **restart your computer** to automatically remove the temporary `GNUPGHOME`. I personally prefer a reboot before testing.
+
+Alternatively, you can manually remove the folder with `rm -rf $GNUPGHOME` to continue without rebooting.
+
+**Setup Finished! 🎉**
 
 ---
 
