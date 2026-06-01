@@ -4,7 +4,7 @@ After ~7 years, it was time to upgrade to new physical keys and newer encryption
 
 ## Setup Features
 
-I mostly use YuibiKeys to sign my git commits and for authentication as a passkey as well as gpg encryption/decryption of `.netrc` so long lived tokens are not stored in plain text on my computer.
+I mostly use YubiKeys to sign my git commits and for authentication as a passkey as well as gpg encryption/decryption of `.netrc` so long lived tokens are not stored in plain text on my computer.
 
 ### Security Features
 
@@ -14,7 +14,7 @@ _Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but ada
 - **Accounts not Hackable without Physical Access**: 
   - All private keys stored offline (encrypted USB or YubiKey)
   - YubiKey configured to require PIN and physical touch on  the gold contact to authorize operations
-  - Config Key Deriviation Function (KDF) to ensure PINs are hashed when crossing USB bus
+  - Config Key Derivation Function (KDF) to ensure PINs are hashed when crossing USB bus
 - Certify passphrase is stored in password manager, separate from USB stick (two factor)
 
 ### Two YubiKeys
@@ -23,7 +23,7 @@ _Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but ada
   Stored separately offline on an APFS-encrypted USB drive. 
 
 - **Subkeys**  
-  Setup two physical YubiKeys that have _identical_ subkeys for redudancy and to be used interchangeably:
+  Setup two physical YubiKeys that have _identical_ subkeys for redundancy and to be used interchangeably:
   - [YubiKey 5C Nano](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nano/) - daily driver and remains plugged into laptop. Removed when traveling.
   - [YubiKey 5C NFC](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nfc/) - backup and used when traveling.
 
@@ -33,7 +33,7 @@ _Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but ada
   FileVault enabled and used for generating key and encrypting USB drive.
 
 - **Password Manager**  
-  For PINs and most importantly storing **certify passkey** separately from USB stick. Both are needed to use the offline primary key.
+  For PINs and most importantly storing **certify passphrase** separately from USB stick. Both are needed to use the offline primary key.
 
 ## Security Terminology & Abbreviations
 
@@ -51,7 +51,7 @@ _Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but ada
 | **Subkey** | `[S]` sign, `[E]` encrypt, `[A]` authenticate. |
 | **ed25519** | elliptic-curve algorithm for SIGNING and SSH auth. Cannot encrypt. |
 | **cv25519** | (Curve25519 / X25519) Algorithm used for ENCRYPTION. |
-| **KDF** | Key Deriviation Function. Makes the YubiKey hash the PIN on the host before sending it to the card, so the PIN isn't transmitted in plaintext. |
+| **KDF** | Key Derivation Function. Makes the YubiKey hash the PIN on the host before sending it to the card, so the PIN isn't transmitted in plaintext. |
 | **stub** | after `keytocard`, the on-disk key becomes a pointer ("stub") to a specific YubiKey serial number. |
 | **User PIN / Admin PIN** | OpenPGP applet PINs. Defaults `123456` / `12345678`. |
 
@@ -73,7 +73,7 @@ _Based on [drduh/YubiKey-Guide](https://github.com/drduh/YubiKey-Guide), but ada
 
 # Setup Instructions
 
-This guide has 4 parts:
+This guide has 5 parts:
 
 - [Part I - Setup, Generate Keys](#part-i---setup-generate-keys)
 - [Part II - Configure YubiKey #1](#part-ii---configure-yubikey-1)
@@ -248,7 +248,7 @@ less $PASSFILE
 and **save the contents to a password manager**, e.g. 1Password. 
 
 > [!CAUTION]
-> Double check your saved the passphrase **before** deleting the file. If you lose it, you can not renew your subkeys.
+> Double check you saved the passphrase **before** deleting the file. If you lose it, you can not renew your subkeys.
 
 Delete the passfile so we don't save the certify keys and required passphrase together.
 
@@ -347,16 +347,16 @@ Pull the stick out of the computer for good measure. We'll plug it back in later
 
 This part configures my daily driver, the [YubiKey 5C Nano](https://www.yubico.com/de/product/yubikey-5-series/yubikey-5c-nano/).
 
-### OpenGPG Requirements
+### OpenPGP Requirements
 
 > [!TIP]
-> A YubiKey has multiple applets and thus multiple PINs. This section refers to the OpenGPG applet. Do not confuse with PIV.
+> A YubiKey has multiple applets and thus multiple PINs. This section refers to the OpenPGP applet. Do not confuse with PIV.
 
 Before continuing note the following requirements. We're using the default PINs for setup, so we can pass it inline in bash.
 
-- [ ] OpenGPG applet is in factory state
-- [ ] OpenGPG User PIN is default `123456` 
-- [ ] OpenGPG Admin PIN is default `12345678`
+- [ ] OpenPGP applet is in factory state
+- [ ] OpenPGP User PIN is default `123456` 
+- [ ] OpenPGP Admin PIN is default `12345678`
 
 During setup, you'll change the PINs.
 
@@ -441,7 +441,7 @@ When prompted, enter your **Admin PIN** to authorize and save the changes.
 
 ##### Troubleshooting
 
-If you get `Bad PIN`, double check and do not brute force. You only have **3 attempts**, after which you need to reset the OpenGPG applet. To check how many attempts are remining, run `ykman openpgp info.
+If you get `Bad PIN`, double check and do not brute force. You only have **3 attempts**, after which you need to reset the OpenPGP applet. To check how many attempts are remaining, run `ykman openpgp info`.
 
 #### 6D. Transfer subkeys to the YubiKey
 
@@ -560,7 +560,7 @@ When prompted, enter your **Admin PIN**.
 
 #### 6F. Disable Yubico OTP (Optional)
 
-Because I don't use Yubico OTP (outputs long `cccccc…`-prefixed string) and I occassionally accidentally brush the gold contact of the nano that lives plugged in, I'm going to disable it:
+Because I don't use Yubico OTP (outputs long `cccccc…`-prefixed string) and I occasionally accidentally brush the gold contact of the nano that lives plugged in, I'm going to disable it:
 
 ```bash
 ykman config usb --disable OTP
@@ -773,7 +773,7 @@ gpg --encrypt --recipient "$KEYID" -o ~/.netrc.gpg ~/.netrc
 Now remove the plain text file
 
 ```bash
-rm .netrc
+rm ~/.netrc
 ```
 
 If configured properly, when doing `git push` to GitHub, you'll be prompted for your PIN and to touch the YubiKey's gold contact.
